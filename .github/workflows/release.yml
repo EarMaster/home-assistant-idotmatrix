@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Get tag version
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        
+      - name: Create release directory
+        run: |
+          mkdir -p release/custom_components
+          
+      - name: Copy integration files
+        run: |
+          cp -r custom_components/idotmatrix release/custom_components/
+          
+      - name: Remove __pycache__ and other unwanted files
+        run: |
+          find release/ -name "__pycache__" -type d -exec rm -rf {} + || true
+          find release/ -name "*.pyc" -delete || true
+          find release/ -name ".DS_Store" -delete || true
+          
+      - name: Create zip file
+        run: |
+          cd release
+          zip -r ../idotmatrix-${{ steps.get_version.outputs.version }}.zip custom_components/
+          cd ..
+          
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          release_name: iDotMatrix Display ${{ steps.get_version.outputs.version }}
+          body: |
+            ## Changes in ${{ steps.get_version.outputs.version }}
+            
+            <!-- Add your changelog here -->
+            
+            ## Installation
+            
+            ### HACS (Recommended)
+            1. Add this repository as a custom repository in HACS
+            2. Install "iDotMatrix Display" 
+            3. Restart Home Assistant
+            
+            ### Manual Installation
+            1. Download the `idotmatrix-${{ steps.get_version.outputs.version }}.zip` file
+            2. Extract to your `custom_components` directory
+            3. Restart Home Assistant
+            
+            ## Requirements
+            - Home Assistant 2023.1 or later
+            - Bluetooth support on your Home Assistant host
+            - iDotMatrix LED display device
+          draft: false
+          prerelease: false
+          
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./idotmatrix-${{ steps.get_version.outputs.version }}.zip
+          asset_name: idotmatrix-${{ steps.get_version.outputs.version }}.zip
+          asset_content_type: application/zip
