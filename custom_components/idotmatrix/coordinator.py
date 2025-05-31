@@ -7,11 +7,12 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_MAC_ADDRESS, CONF_NAME
+from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    CONF_MAC_ADDRESS,
     CONNECTION_TIMEOUT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
