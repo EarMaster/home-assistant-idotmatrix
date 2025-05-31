@@ -1,0 +1,132 @@
+# Example configuration for iDotMatrix integration
+
+# The integration is configured through the UI, but here are some
+# example automations and scripts you can use:
+
+# Configuration through UI only - no YAML configuration needed
+
+# Example automations:
+automation:
+  # Display time and weather every morning
+  - alias: "Morning Display Update"
+    trigger:
+      - platform: time
+        at: "07:00:00"
+    action:
+      - service: idotmatrix.display_text
+        data:
+          message: >
+            Good Morning! 
+            {{ now().strftime('%H:%M') }} 
+            {{ states('weather.home') | title }} 
+            {{ state_attr('weather.home', 'temperature') }}°C
+          color: cyan
+          font_size: medium
+          speed: 50
+
+  # Show notification when someone arrives home
+  - alias: "Welcome Home Display"
+    trigger:
+      - platform: state
+        entity_id: person.john
+        to: "home"
+    action:
+      - service: idotmatrix.display_text
+        data:
+          message: "Welcome Home, John!"
+          color: green
+          font_size: large
+
+  # Birthday celebration effect
+  - alias: "Birthday Celebration"
+    trigger:
+      - platform: calendar
+        event: start
+        entity_id: calendar.birthdays
+    action:
+      - service: idotmatrix.display_effect
+        data:
+          effect_type: stars
+          duration: 30
+      - delay: "00:00:30"
+      - service: idotmatrix.display_text
+        data:
+          message: "🎉 Happy Birthday! 🎂"
+          color: pink
+
+  # Sync time daily
+  - alias: "Daily Time Sync"
+    trigger:
+      - platform: time
+        at: "00:00:00"
+    action:
+      - service: idotmatrix.sync_time
+
+# Example scripts:
+script:
+  display_weather:
+    alias: "Display Current Weather"
+    sequence:
+      - service: idotmatrix.display_text
+        data:
+          message: >
+            {{ states('weather.home') | title }}
+            {{ state_attr('weather.home', 'temperature') }}°C
+            Feels like {{ state_attr('weather.home', 'apparent_temperature') }}°C
+          color: blue
+          font_size: medium
+
+  display_time:
+    alias: "Display Current Time"
+    sequence:
+      - service: idotmatrix.set_clock_mode
+        data:
+          clock_style: digital
+
+  party_mode:
+    alias: "Party Mode"
+    sequence:
+      - service: idotmatrix.display_effect
+        data:
+          effect_type: rainbow
+          duration: 60
+          speed: 80
+      - delay: "00:01:00"
+      - service: idotmatrix.display_effect
+        data:
+          effect_type: plasma
+          duration: 60
+          speed: 70
+
+  emergency_alert:
+    alias: "Emergency Alert"
+    sequence:
+      - service: idotmatrix.display_text
+        data:
+          message: "🚨 ALERT 🚨"
+          color: red
+          font_size: large
+          speed: 100
+
+# Example sensor for tracking display state:
+template:
+  - sensor:
+      - name: "iDotMatrix Status"
+        state: >
+          {% set light = states('light.idotmatrix_display') %}
+          {% set mode = state_attr('select.idotmatrix_clock_style', 'state') %}
+          {% if light == 'on' %}
+            {% if mode %}
+              On - {{ mode | title }} Mode
+            {% else %}
+              On
+            {% endif %}
+          {% else %}
+            Off
+          {% endif %}
+        icon: >
+          {% if is_state('light.idotmatrix_display', 'on') %}
+            mdi:led-on
+          {% else %}
+            mdi:led-off
+          {% endif %}

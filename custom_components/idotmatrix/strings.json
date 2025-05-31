@@ -1,0 +1,53 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "iDotMatrix Display Setup",
+        "description": "Set up your iDotMatrix LED display. You can either scan for devices automatically or enter device information manually.",
+        "data": {
+          "scan_for_devices": "Scan for devices automatically"
+        }
+      },
+      "discovery": {
+        "title": "Select Device",
+        "description": "Found {devices_found} iDotMatrix device(s). Select your device from the list below, or choose manual entry if your device is not listed.",
+        "data": {
+          "device": "Select Device",
+          "manual_entry": "Enter device manually instead"
+        }
+      },
+      "manual": {
+        "title": "Add Device Manually",
+        "description": "Enter your iDotMatrix device information manually.",
+        "data": {
+          "device_name": "Device Name",
+          "mac_address": "MAC Address"
+        }
+      }
+    },
+    "error": {
+      "no_devices_found": "No iDotMatrix devices found. Make sure your device is powered on and in pairing mode.",
+      "scan_failed": "Failed to scan for devices. Check that Bluetooth is enabled.",
+      "invalid_mac": "Invalid MAC address format. Use format XX:XX:XX:XX:XX:XX",
+      "cannot_connect": "Failed to connect to device",
+      "already_configured": "Device is already configured"
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "already_in_progress": "Configuration flow is already in progress"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "iDotMatrix Options",
+        "description": "Configure options for your iDotMatrix device.",
+        "data": {
+          "scan_interval": "Update interval (seconds)",
+          "connection_timeout": "Connection timeout (seconds)",
+          "retry_attempts": "Maximum retry attempts"
+        }
+      }
+    }
+  }
+}

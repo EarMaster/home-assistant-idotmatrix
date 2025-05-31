@@ -1,0 +1,121 @@
+display_text:
+  name: Display Text
+  description: Display a text message on the iDotMatrix display
+  fields:
+    message:
+      name: Message
+      description: Text message to display
+      required: true
+      selector:
+        text:
+    font_size:
+      name: Font Size
+      description: Size of the font
+      default: medium
+      selector:
+        select:
+          options:
+            - small
+            - medium
+            - large
+    color:
+      name: Color
+      description: Text color (name or RGB values)
+      default: white
+      selector:
+        select:
+          options:
+            - red
+            - green
+            - blue
+            - yellow
+            - cyan
+            - magenta
+            - white
+            - orange
+            - purple
+            - pink
+    speed:
+      name: Speed
+      description: Animation speed (1-100)
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 100
+
+display_image:
+  name: Display Image
+  description: Display an image or GIF on the iDotMatrix display
+  fields:
+    image_path:
+      name: Image Path
+      description: Path to the image file
+      required: true
+      selector:
+        text:
+    duration:
+      name: Duration
+      description: How long to display the image (seconds)
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+
+set_clock_mode:
+  name: Set Clock Mode
+  description: Set the clock display style
+  fields:
+    clock_style:
+      name: Clock Style
+      description: Style of the clock display
+      required: true
+      selector:
+        select:
+          options:
+            - classic
+            - digital
+            - analog
+            - minimal
+            - colorful
+
+display_effect:
+  name: Display Effect
+  description: Display a visual effect on the iDotMatrix display
+  fields:
+    effect_type:
+      name: Effect Type
+      description: Type of visual effect
+      required: true
+      selector:
+        select:
+          options:
+            - rainbow
+            - breathing
+            - wave
+            - fire
+            - snow
+            - matrix
+            - stars
+            - plasma
+    duration:
+      name: Duration
+      description: How long to run the effect (seconds)
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 300
+    speed:
+      name: Speed
+      description: Effect animation speed (1-100)
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 100
+
+sync_time:
+  name: Sync Time
+  description: Synchronize the device time with Home Assistant
