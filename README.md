@@ -24,7 +24,7 @@ A custom Home Assistant integration for iDotMatrix LED displays that provides de
 1. Open HACS in Home Assistant
 2. Go to "Integrations"
 3. Click the three dots menu and select "Custom repositories"
-4. Add this repository URL: `https://github.com/nicow/home-assistant-idotmatrix`
+4. Add this repository URL: `https://github.com/EarMaster/home-assistant-idotmatrix`
 5. Select "Integration" as the category
 6. Click "Add"
 7. Find "iDotMatrix Display" in HACS and install it
@@ -263,7 +263,7 @@ This integration uses the [python3-idotmatrix-library](https://github.com/derkal
 
 ## Support
 
-For issues and feature requests, please use the [GitHub Issues](https://github.com/nicow/home-assistant-idotmatrix/issues) page.
+For issues and feature requests, please use the [GitHub Issues](https://github.com/EarMaster/home-assistant-idotmatrix/issues) page.
 
 ## License
 
