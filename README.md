@@ -1,5 +1,7 @@
 # Home Assistant iDotMatrix Integration
 
+[![Add to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=EarMaster&repository=home-assistant-idotmatrix&category=integration)
+
 A custom Home Assistant integration for iDotMatrix LED displays that provides device discovery, connection management, and comprehensive control through the Home Assistant UI.
 
 ## Features
