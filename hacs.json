@@ -1,7 +1,10 @@
 {
   "name": "iDotMatrix Display",
   "hacs": "1.6.0",
-  "domains": ["idotmatrix"],
+  "domains": [
+    "idotmatrix"
+  ],
   "iot_class": "Local Polling",
-  "homeassistant": "2023.1.0"
+  "homeassistant": "2023.1.0",
+  "zip_release": true
 }
