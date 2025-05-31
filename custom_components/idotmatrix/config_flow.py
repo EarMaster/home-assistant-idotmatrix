@@ -78,14 +78,12 @@ class IDotMatrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if selected_device:
                     return await self._async_create_entry_from_device(selected_device)
             else:
-                return await self.async_step_manual()
-
-        # Scan for devices
+                return await self.async_step_manual()        # Scan for devices
         try:
             from idotmatrix import ConnectionManager
             
             connection_manager = ConnectionManager()
-            devices = await connection_manager.scan(timeout=SCAN_TIMEOUT)
+            devices = await connection_manager.scan()
             
             self._discovered_devices = []
             for device in devices:
