@@ -258,7 +258,7 @@ This integration uses the [python3-idotmatrix-library](https://github.com/derkal
 **Note**: This project was primarily created and developed by GitHub Copilot AI assistant, with guidance and requirements provided by the user.
 
 ### Dependencies
-- `idotmatrix-library>=0.1.0`
+- `idotmatrix>=0.0.9`
 - Home Assistant 2023.1 or later
 
 ## Support
