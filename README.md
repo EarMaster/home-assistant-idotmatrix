@@ -10,8 +10,9 @@ A custom Home Assistant integration for iDotMatrix LED displays that provides de
 - **Manual Device Entry**: Add devices by MAC address if auto-discovery fails
 - **Display Control**: Turn display on/off and adjust brightness
 - **Text Display**: Send custom text messages to the display
-- **Clock Modes**: Multiple clock styles (classic, digital, analog, minimal, colorful)
-- **Visual Effects**: Various effects like rainbow, breathing, wave, fire, snow, matrix, stars, plasma
+- **Clock Modes**: Multiple clock styles (RGB Swipe Outline, Christmas Tree, Checkers, Color, Hourglass, Alarm Clock, Outlines, RGB Corners)
+- **Visual Effects**: Various effects like Horizontal Rainbow, Random Colored Pixels, Vertical Rainbow, Diagonal Rainbow, and more
+- **Stable Connection**: Persistent Bluetooth connection with automatic reconnect — commands work reliably without manual intervention
 - **Screen Controls**: Flip/rotate screen orientation
 - **Chronograph**: Start, stop, and reset stopwatch functionality
 - **Time Synchronization**: Sync device time with Home Assistant
@@ -60,6 +61,7 @@ A custom Home Assistant integration for iDotMatrix LED displays that provides de
 3. Choose between automatic device discovery or manual entry:
    - **Automatic**: The integration will scan for nearby iDotMatrix devices
    - **Manual**: Enter the device name and MAC address manually
+4. Select your display's **screen size** (16×16, 32×32, or 64×64 pixels). Most IDM- devices are 32×32 — check the back of the device or its packaging if unsure.
 
 ### Device Discovery
 
@@ -140,30 +142,26 @@ data:
 Set the clock display style.
 
 **Parameters:**
-- `clock_style` (required): Clock style (classic, digital, analog, minimal, colorful)
+- `clock_style` (required): Clock style. Available values: `RGB Swipe Outline`, `Christmas Tree`, `Checkers`, `Color`, `Hourglass`, `Alarm Clock`, `Outlines`, `RGB Corners`
 
 **Example:**
 ```yaml
 service: idotmatrix.set_clock_mode
 data:
-  clock_style: digital
+  clock_style: Hourglass
 ```
 
 ### `idotmatrix.display_effect`
 Display a visual effect.
 
 **Parameters:**
-- `effect_type` (required): Effect type (rainbow, breathing, wave, fire, snow, matrix, stars, plasma)
-- `duration` (optional): Effect duration in seconds
-- `speed` (optional): Animation speed (1-100)
+- `effect_type` (required): Effect type. Available values: `Horizontal Rainbow`, `Random Colored Pixels`, `White on Changing BG`, `Vertical Rainbow`, `Diagonal Right Rainbow`, `Diagonal Left Rainbow`, `Random Colored`
 
 **Example:**
 ```yaml
 service: idotmatrix.display_effect
 data:
-  effect_type: rainbow
-  duration: 30
-  speed: 60
+  effect_type: Horizontal Rainbow
 ```
 
 ### `idotmatrix.sync_time`
@@ -255,12 +253,10 @@ automation:
 
 ## Development
 
-This integration uses the [python3-idotmatrix-library](https://github.com/derkalle4/python3-idotmatrix-library) for device communication.
-
-**Note**: This project was primarily created and developed by GitHub Copilot AI assistant, with guidance and requirements provided by the user.
+This integration uses the [idotmatrix-api-client](https://github.com/markusressel/idotmatrix-api-client) library for device communication.
 
 ### Dependencies
-- `idotmatrix>=0.0.9`
+- `idotmatrix>=0.1.0`
 - Home Assistant 2023.1 or later
 
 ## Support
