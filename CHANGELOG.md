@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-05-13
+
+### Breaking Changes
+- Clock style names have changed to match the new library's `ClockStyle` enum. The previous values (`classic`, `digital`, `analog`, `minimal`, `colorful`) are no longer valid. New values are: `RGB Swipe Outline`, `Christmas Tree`, `Checkers`, `Color`, `Hourglass`, `Alarm Clock`, `Outlines`, `RGB Corners`. Update any automations or scripts that reference clock styles.
+- Effect type names have changed. Previous values (`rainbow`, `random_pixels`, etc.) are replaced with: `Horizontal Rainbow`, `Random Colored Pixels`, `White on Changing BG`, `Vertical Rainbow`, `Diagonal Right Rainbow`, `Diagonal Left Rainbow`, `Random Colored`.
+- The options flow no longer exposes `connection_timeout` or `retry_attempts` — these are now managed automatically by the library.
+
+### Added
+- **Screen size selection** in the configuration flow. When adding a device you are now asked to specify the display resolution (16×16, 32×32, or 64×64 pixels). This is required by the new library. The default is 32×32, which matches most IDM- devices.
+- **Persistent Bluetooth connection with automatic reconnect.** The integration now maintains a live BLE connection and lets the library retry every 5 seconds when the device goes out of range, instead of creating a fresh connection for every command.
+- Availability updates are now immediate: entities switch to unavailable as soon as the device disconnects and become available again the moment the connection is restored, rather than waiting for the next 30-second poll.
+
+### Changed
+- Upgraded from the archived `derkalle4/python3-idotmatrix-library` to `markusressel/idotmatrix-api-client` (≥0.1.0), which is actively maintained and has a cleaner module-based API.
+- Chronograph "Stop" button now pauses the chronograph (the new library has `pause()` but no discrete `stop()`).
+
 ## [1.0.7] - 2026-05-12
 
 ### Fixed
