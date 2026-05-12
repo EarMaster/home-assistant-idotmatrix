@@ -37,4 +37,4 @@ class IDotMatrixEntity(CoordinatorEntity[IDotMatrixDataUpdateCoordinator]):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator._connected
+        return self.coordinator.last_update_success
