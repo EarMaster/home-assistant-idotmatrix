@@ -5,13 +5,6 @@
         "title": "iDotMatrix Display Found",
         "description": "Do you want to add {name} to Home Assistant?"
       },
-      "user": {
-        "title": "iDotMatrix Display Setup",
-        "description": "Set up your iDotMatrix LED display. You can either scan for devices automatically or enter device information manually.",
-        "data": {
-          "scan_for_devices": "Scan for devices automatically"
-        }
-      },
       "discovery": {
         "title": "Select Device",
         "description": "Select your iDotMatrix device from the list below, or choose manual entry if your device is not listed.",

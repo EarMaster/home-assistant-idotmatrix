@@ -14,9 +14,9 @@ from homeassistant.data_entry_flow import FlowResult
 from .const import (
     CONF_DEVICE_NAME,
     CONF_MAC_ADDRESS,
-    DEFAULT_NAME,
     DEFAULT_SCAN_INTERVAL,
     CONNECTION_TIMEOUT,
+    DEFAULT_NAME,
     MAX_RETRIES,
     DOMAIN,
 )
@@ -68,22 +68,8 @@ class IDotMatrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the initial step."""
-        if user_input is not None:
-            if user_input.get("scan_for_devices"):
-                return await self.async_step_discovery()
-            else:
-                return await self.async_step_manual()
-
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("scan_for_devices", default=True): bool,
-                }
-            ),
-            description_placeholders={"name": DEFAULT_NAME},
-        )
+        """Skip straight to device discovery."""
+        return await self.async_step_discovery()
 
     async def async_step_discovery(
         self, user_input: dict[str, Any] | None = None
