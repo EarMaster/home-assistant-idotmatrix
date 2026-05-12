@@ -63,7 +63,9 @@ A custom Home Assistant integration for iDotMatrix LED displays that provides de
 
 ### Device Discovery
 
-The integration automatically scans for Bluetooth devices with names starting with "IDM-". If your device is found, select it from the list and click "Submit".
+iDotMatrix devices (names starting with "IDM-") are discovered automatically by Home Assistant's Bluetooth integration. If HA has already seen the device, it will appear under **Settings → Devices & Services** as a new device ready to add — just click "Configure" to confirm.
+
+If the device has not been auto-discovered, use the manual setup flow inside the integration and choose "Scan for devices" to query HA's Bluetooth cache, or enter the MAC address directly.
 
 ### Manual Entry
 
