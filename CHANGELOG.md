@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-05-12
+
+### Added
+- Periodic availability check: the coordinator now polls HA's Bluetooth advertisement cache every 30 seconds (configurable). If the device has not been seen recently, all entities are marked unavailable in Home Assistant and recover automatically when the device comes back in range.
+
+### Fixed
+- Bluetooth connections are no longer kept alive between commands. Each command now connects, sends, and disconnects in one atomic operation. This prevents the "dropped connection" errors that occurred when the device closed an idle BLE link.
+- The initial config flow dialog no longer shows a pointless "scan for devices" checkbox — it now opens the device list directly.
+
 ## [1.0.4] - 2026-05-12
 
 ### Fixed
