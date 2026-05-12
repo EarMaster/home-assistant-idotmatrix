@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-05-12
+
+### Fixed
+- Bluetooth connection failed with "No backend with an available connection slot" because the `idotmatrix` library was passing a raw MAC address string to `BleakClient`. Home Assistant's `habluetooth` layer requires a `BLEDevice` object to route the connection to the correct adapter. The coordinator now retrieves the `BLEDevice` from HA's Bluetooth registry via `async_ble_device_from_address` before connecting.
+
 ## [1.0.3] - 2026-05-12
 
 ### Fixed
