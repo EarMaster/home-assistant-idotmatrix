@@ -1,6 +1,10 @@
 {
   "config": {
     "step": {
+      "bluetooth_confirm": {
+        "title": "iDotMatrix Display Found",
+        "description": "Do you want to add {name} to Home Assistant?"
+      },
       "user": {
         "title": "iDotMatrix Display Setup",
         "description": "Set up your iDotMatrix LED display. You can either scan for devices automatically or enter device information manually.",

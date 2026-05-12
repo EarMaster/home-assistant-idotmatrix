@@ -5,14 +5,14 @@
     "@EarMaster"
   ],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["bluetooth"],
   "documentation": "https://github.com/EarMaster/home-assistant-idotmatrix",
   "integration_type": "device",
   "iot_class": "local_polling",
   "requirements": [
     "idotmatrix>=0.0.9"
   ],
-  "version": "1.0.0",
+  "version": "1.0.1",
   "icon": "mdi:led-strip",
   "bluetooth": [
     {
