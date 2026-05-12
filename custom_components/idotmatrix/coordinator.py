@@ -3,16 +3,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
+from homeassistant.components.bluetooth import async_ble_device_from_address
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
     CONF_MAC_ADDRESS,
+    DEFAULT_SCAN_INTERVAL,
     DOMAIN,
 )
 
@@ -42,11 +44,13 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             "last_message": "",
         }
 
+        self._scan_interval = entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL)
+
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=None,
+            update_interval=timedelta(seconds=self._scan_interval),
         )
 
     def _fire_event(self, event_type: str, data: dict[str, Any] | None = None) -> None:
@@ -98,7 +102,13 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 self._connection_manager.client = None
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Return locally tracked state — no read-back from device possible."""
+        """Check device availability using HA's Bluetooth advertisement cache.
+
+        No connection is made — HA's scanner passively tracks nearby devices.
+        If the device is absent from the cache, entities go unavailable.
+        """
+        if not async_ble_device_from_address(self.hass, self.mac_address, connectable=True):
+            raise UpdateFailed(f"Device {self.mac_address} not seen recently — out of range or powered off")
         return self._state.copy()
 
     async def _async_send_command(self, command_func, *args, **kwargs) -> bool:
