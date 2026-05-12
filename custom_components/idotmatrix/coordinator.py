@@ -3,21 +3,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
     CONF_MAC_ADDRESS,
-    CONNECTION_TIMEOUT,
-    DEFAULT_SCAN_INTERVAL,
     DOMAIN,
-    MAX_RETRIES,
-    RECONNECT_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,14 +29,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self.mac_address = entry.data[CONF_MAC_ADDRESS]
         self.device_name = entry.data[CONF_NAME]
 
-        self._scan_interval = entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL)
-        self._connection_timeout = entry.options.get("connection_timeout", CONNECTION_TIMEOUT)
-        self._max_retries = entry.options.get("retry_attempts", MAX_RETRIES)
-
         self._connection_manager = None
-        self._connected = False
         self._command_lock = asyncio.Lock()
-        self._retry_count = 0
 
         self._state = {
             "is_on": False,
@@ -56,7 +46,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=self._scan_interval),
+            update_interval=None,
         )
 
     def _fire_event(self, event_type: str, data: dict[str, Any] | None = None) -> None:
@@ -69,90 +59,66 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             event_data.update(data)
         self.hass.bus.async_fire(f"{DOMAIN}_{event_type}", event_data)
 
-    def _is_connected(self) -> bool:
-        """Return whether the BleakClient is currently connected."""
-        return (
-            self._connection_manager is not None
-            and self._connection_manager.client is not None
-            and self._connection_manager.client.is_connected
-        )
-
     async def async_connect(self) -> bool:
         """Connect to the device."""
-        try:
-            from bleak import BleakClient
-            from homeassistant.components.bluetooth import async_ble_device_from_address
-            from idotmatrix import ConnectionManager
+        from bleak import BleakClient
+        from homeassistant.components.bluetooth import async_ble_device_from_address
+        from idotmatrix import ConnectionManager
 
-            # HA's habluetooth requires a BLEDevice object, not a plain MAC string,
-            # to route the connection to the correct Bluetooth adapter/backend.
-            ble_device = async_ble_device_from_address(
-                self.hass, self.mac_address, connectable=True
+        # habluetooth requires a BLEDevice object (not a plain MAC string) to
+        # route the connection to the correct adapter.
+        ble_device = async_ble_device_from_address(
+            self.hass, self.mac_address, connectable=True
+        )
+        if not ble_device:
+            _LOGGER.debug(
+                "Device %s not in HA Bluetooth registry — not in range yet",
+                self.mac_address,
             )
-            if not ble_device:
-                _LOGGER.error(
-                    "Device %s not found in HA Bluetooth registry — ensure it is powered on and in range",
-                    self.mac_address,
-                )
-                return False
-
-            self._connection_manager = ConnectionManager()
-            self._connection_manager.address = self.mac_address
-            self._connection_manager.client = BleakClient(ble_device)
-            await self._connection_manager.client.connect()
-
-            if self._is_connected():
-                self._connected = True
-                self._retry_count = 0
-                _LOGGER.info("Connected to iDotMatrix device %s", self.mac_address)
-                return True
-
-            _LOGGER.error("Failed to connect to device %s", self.mac_address)
             return False
 
-        except Exception as ex:
-            _LOGGER.exception("Error connecting to device %s: %s", self.mac_address, ex)
-            return False
+        self._connection_manager = ConnectionManager()
+        self._connection_manager.address = self.mac_address
+        self._connection_manager.client = BleakClient(ble_device)
+        await self._connection_manager.client.connect()
+        return self._connection_manager.client.is_connected
 
     async def async_disconnect(self) -> None:
         """Disconnect from the device."""
-        if self._connection_manager is not None and self._is_connected():
+        if (
+            self._connection_manager is not None
+            and self._connection_manager.client is not None
+            and self._connection_manager.client.is_connected
+        ):
             try:
-                await self._connection_manager.disconnect()
+                await self._connection_manager.client.disconnect()
             except Exception as ex:
-                _LOGGER.error("Error disconnecting from device: %s", ex)
+                _LOGGER.debug("Error disconnecting: %s", ex)
             finally:
-                self._connected = False
+                self._connection_manager.client = None
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Update data via library."""
-        if not self._is_connected():
-            if self._retry_count < self._max_retries:
-                _LOGGER.warning("Device disconnected, attempting to reconnect...")
-                if await self.async_connect():
-                    self._retry_count = 0
-                else:
-                    self._retry_count += 1
-            else:
-                raise UpdateFailed(f"Failed to connect to device after {self._max_retries} attempts")
-
-        # The library has no state read-back; return locally tracked state
+        """Return locally tracked state — no read-back from device possible."""
         return self._state.copy()
 
     async def _async_send_command(self, command_func, *args, **kwargs) -> bool:
-        """Send a command to the device with error handling."""
-        async with self._command_lock:
-            if not self._is_connected():
-                _LOGGER.error("Device not connected")
-                return False
+        """Connect, send a command, then disconnect.
 
+        BLE is not designed for persistent connections — connect-on-demand
+        avoids dropped-connection errors between commands.
+        """
+        async with self._command_lock:
             try:
+                if not await self.async_connect():
+                    _LOGGER.warning("Cannot reach %s — device may be off or out of range", self.mac_address)
+                    return False
                 await command_func(*args, **kwargs)
                 return True
             except Exception as ex:
-                _LOGGER.error("Error sending command: %s", ex)
-                self._connected = False
+                _LOGGER.error("Error sending command to %s: %s", self.mac_address, ex)
                 return False
+            finally:
+                await self.async_disconnect()
 
     # Display control methods
 
