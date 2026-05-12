@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-05-12
+
+### Fixed
+- Integration failed to load entirely with "No setup or config entry setup function defined" because `__init__.py` was empty. Added `async_setup_entry` and `async_unload_entry`, which are required by Home Assistant to initialise the coordinator, register platforms, and clean up on removal.
+- Config flow discovery step threw a 500 Internal Server Error when no devices were found, because the description string referenced a `{devices_found}` placeholder that was not passed in the error path. Removed the placeholder from the description.
+
 ## [1.0.2] - 2026-05-12
 
 ### Fixed
