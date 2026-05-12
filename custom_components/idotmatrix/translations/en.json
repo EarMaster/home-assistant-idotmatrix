@@ -20,6 +20,13 @@
           "device_name": "Device Name",
           "mac_address": "MAC Address"
         }
+      },
+      "configure": {
+        "title": "Configure {name}",
+        "description": "Select the pixel resolution of your iDotMatrix display. Check the back of the device or the original packaging — most IDM- devices are 32×32.",
+        "data": {
+          "screen_size": "Screen Size"
+        }
       }
     },
     "error": {
@@ -40,9 +47,7 @@
         "title": "iDotMatrix Options",
         "description": "Configure options for your iDotMatrix device.",
         "data": {
-          "scan_interval": "Update interval (seconds)",
-          "connection_timeout": "Connection timeout (seconds)",
-          "retry_attempts": "Maximum retry attempts"
+          "scan_interval": "Update interval (seconds)"
         }
       }
     }

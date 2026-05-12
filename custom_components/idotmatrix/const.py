@@ -6,13 +6,22 @@ DOMAIN = "idotmatrix"
 # Configuration
 CONF_DEVICE_NAME = "device_name"
 CONF_MAC_ADDRESS = "mac_address"
+CONF_SCREEN_SIZE = "screen_size"
 
 # Default values
 DEFAULT_NAME = "iDotMatrix Display"
 DEFAULT_SCAN_INTERVAL = 30
+DEFAULT_SCREEN_SIZE = "32x32"
 
 # Platforms
 PLATFORMS = ["light", "switch", "text", "select", "button"]
+
+# Screen sizes (display label → ScreenSize enum member name)
+SCREEN_SIZES = {
+    "16x16": "SIZE_16x16",
+    "32x32": "SIZE_32x32",
+    "64x64": "SIZE_64x64",
+}
 
 # Services
 SERVICE_DISPLAY_TEXT = "display_text"
@@ -31,24 +40,27 @@ ATTR_CLOCK_STYLE = "clock_style"
 ATTR_EFFECT_TYPE = "effect_type"
 ATTR_DURATION = "duration"
 
-# Clock styles mapping
+# Clock styles — matches ClockStyle enum in idotmatrix>=0.1.0
 CLOCK_STYLES = {
-    "classic": 0,
-    "digital": 1,
-    "analog": 2,
-    "minimal": 3,
-    "colorful": 4,
+    "RGB Swipe Outline": 0,
+    "Christmas Tree": 1,
+    "Checkers": 2,
+    "Color": 3,
+    "Hourglass": 4,
+    "Alarm Clock": 5,
+    "Outlines": 6,
+    "RGB Corners": 7,
 }
 
-# Effect types mapping (styles 0-6 per idotmatrix library Effect.setMode)
+# Effect types — matches EffectStyle enum in idotmatrix>=0.1.0 (integers 0–6)
 EFFECT_TYPES = {
-    "rainbow": 0,
-    "random_pixels": 1,
-    "white": 2,
-    "rainbow_vertical": 3,
-    "diagonal_right": 4,
-    "diagonal_left": 5,
-    "random": 6,
+    "Horizontal Rainbow": 0,
+    "Random Colored Pixels": 1,
+    "White on Changing BG": 2,
+    "Vertical Rainbow": 3,
+    "Diagonal Right Rainbow": 4,
+    "Diagonal Left Rainbow": 5,
+    "Random Colored": 6,
 }
 
 # Font sizes
@@ -71,9 +83,3 @@ COLOR_PRESETS = {
     "purple": (128, 0, 128),
     "pink": (255, 192, 203),
 }
-
-# Device connection constants
-SCAN_TIMEOUT = 10
-CONNECTION_TIMEOUT = 30
-RECONNECT_INTERVAL = 60
-MAX_RETRIES = 3

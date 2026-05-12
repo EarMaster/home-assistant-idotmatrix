@@ -20,13 +20,20 @@ sys.modules['homeassistant.components.text'] = MagicMock()
 sys.modules['homeassistant.components.select'] = MagicMock()
 sys.modules['homeassistant.components.button'] = MagicMock()
 
-# Mock the iDotMatrix library
+# Mock the Home Assistant Bluetooth component (needed by config_flow)
+sys.modules['homeassistant.components.bluetooth'] = MagicMock()
+
+# Mock idotmatrix>=0.1.0 (markusressel/idotmatrix-api-client) submodule paths
 sys.modules['idotmatrix'] = MagicMock()
-sys.modules['idotmatrix.common'] = MagicMock()
-sys.modules['idotmatrix.text'] = MagicMock()
-sys.modules['idotmatrix.clock'] = MagicMock()
-sys.modules['idotmatrix.effects'] = MagicMock()
-sys.modules['idotmatrix.chronograph'] = MagicMock()
+sys.modules['idotmatrix.client'] = MagicMock()
+sys.modules['idotmatrix.screensize'] = MagicMock()
+sys.modules['idotmatrix.connection_manager'] = MagicMock()
+sys.modules['idotmatrix.modules'] = MagicMock()
+sys.modules['idotmatrix.modules.clock'] = MagicMock()
+sys.modules['idotmatrix.modules.effect'] = MagicMock()
+sys.modules['idotmatrix.modules.common'] = MagicMock()
+sys.modules['idotmatrix.modules.text'] = MagicMock()
+sys.modules['idotmatrix.modules.chronograph'] = MagicMock()
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)

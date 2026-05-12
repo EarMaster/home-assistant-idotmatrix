@@ -10,7 +10,7 @@
   "integration_type": "device",
   "iot_class": "local_polling",
   "requirements": [
-    "idotmatrix>=0.0.9"
+    "idotmatrix>=0.1.0"
   ],
   "version": "1.0.7",
   "icon": "mdi:led-strip",

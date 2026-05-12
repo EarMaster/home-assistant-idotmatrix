@@ -14,11 +14,12 @@ from homeassistant.data_entry_flow import FlowResult
 from .const import (
     CONF_DEVICE_NAME,
     CONF_MAC_ADDRESS,
-    DEFAULT_SCAN_INTERVAL,
-    CONNECTION_TIMEOUT,
+    CONF_SCREEN_SIZE,
     DEFAULT_NAME,
-    MAX_RETRIES,
+    DEFAULT_SCAN_INTERVAL,
+    DEFAULT_SCREEN_SIZE,
     DOMAIN,
+    SCREEN_SIZES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ class IDotMatrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Confirm adding a Bluetooth-discovered device."""
         if user_input is not None:
-            return await self._async_create_entry_from_device(self._selected_device)
+            return await self.async_step_configure()
 
         return self.async_show_form(
             step_id="bluetooth_confirm",
@@ -82,7 +83,8 @@ class IDotMatrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 device_mac = user_input["device"]
                 for device in self._discovered_devices:
                     if device["mac_address"] == device_mac:
-                        return await self._async_create_entry_from_device(device)
+                        self._selected_device = device
+                        return await self.async_step_configure()
             return await self.async_step_manual()
 
         # Use HA's Bluetooth subsystem — avoids spawning a competing BleakScanner
@@ -138,9 +140,8 @@ class IDotMatrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 await self.async_set_unique_id(mac_address)
                 self._abort_if_unique_id_configured()
-                return await self._async_create_entry_from_device(
-                    {"name": device_name, "mac_address": mac_address}
-                )
+                self._selected_device = {"name": device_name, "mac_address": mac_address}
+                return await self.async_step_configure()
 
         return self.async_show_form(
             step_id="manual",
@@ -151,6 +152,28 @@ class IDotMatrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
+        )
+
+    async def async_step_configure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Select screen size before creating the config entry."""
+        if user_input is not None:
+            self._selected_device[CONF_SCREEN_SIZE] = user_input.get(
+                CONF_SCREEN_SIZE, DEFAULT_SCREEN_SIZE
+            )
+            return await self._async_create_entry_from_device(self._selected_device)
+
+        return self.async_show_form(
+            step_id="configure",
+            description_placeholders={"name": self._selected_device.get("name", "")},
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_SCREEN_SIZE, default=DEFAULT_SCREEN_SIZE): vol.In(
+                        list(SCREEN_SIZES.keys())
+                    ),
+                }
+            ),
         )
 
     async def _async_create_entry_from_device(
@@ -168,6 +191,7 @@ class IDotMatrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data={
                 CONF_NAME: device_name,
                 CONF_MAC_ADDRESS: mac_address,
+                CONF_SCREEN_SIZE: device.get(CONF_SCREEN_SIZE, DEFAULT_SCREEN_SIZE),
             },
         )
 
@@ -200,14 +224,6 @@ class IDotMatrixOptionsFlowHandler(config_entries.OptionsFlow):
                         "scan_interval",
                         default=self.config_entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL),
                     ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
-                    vol.Optional(
-                        "connection_timeout",
-                        default=self.config_entry.options.get("connection_timeout", CONNECTION_TIMEOUT),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=5, max=120)),
-                    vol.Optional(
-                        "retry_attempts",
-                        default=self.config_entry.options.get("retry_attempts", MAX_RETRIES),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
                 }
             ),
         )

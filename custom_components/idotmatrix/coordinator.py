@@ -6,51 +6,66 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from homeassistant.components.bluetooth import async_ble_device_from_address
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
+    CLOCK_STYLES,
     CONF_MAC_ADDRESS,
+    CONF_SCREEN_SIZE,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_SCREEN_SIZE,
     DOMAIN,
+    EFFECT_TYPES,
+    SCREEN_SIZES,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
+_DEFAULT_CLOCK_STYLE = next(iter(CLOCK_STYLES))
+_DEFAULT_EFFECT_MODE = next(iter(EFFECT_TYPES))
+_CLOCK_STYLE_BY_ID = {v: k for k, v in CLOCK_STYLES.items()}
+_EFFECT_MODE_BY_ID = {v: k for k, v in EFFECT_TYPES.items()}
+
 
 class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching data from the API."""
+    """Manage data updates for an iDotMatrix device."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize."""
         self.entry = entry
-        self.hass = hass
         self.mac_address = entry.data[CONF_MAC_ADDRESS]
         self.device_name = entry.data[CONF_NAME]
 
-        self._connection_manager = None
         self._command_lock = asyncio.Lock()
+        self._connected = False
 
-        self._state = {
+        self._state: dict[str, Any] = {
             "is_on": False,
             "brightness": 255,
             "screen_flipped": False,
             "current_mode": "clock",
-            "clock_style": "classic",
-            "effect_mode": "rainbow",
+            "clock_style": _DEFAULT_CLOCK_STYLE,
+            "effect_mode": _DEFAULT_EFFECT_MODE,
             "last_message": "",
         }
 
-        self._scan_interval = entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL)
+        from idotmatrix.client import IDotMatrixClient
+        from idotmatrix.screensize import ScreenSize
+
+        screen_size_key = entry.data.get(CONF_SCREEN_SIZE, DEFAULT_SCREEN_SIZE)
+        self._client = IDotMatrixClient(
+            screen_size=ScreenSize[SCREEN_SIZES[screen_size_key]],
+            mac_address=self.mac_address,
+        )
 
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=self._scan_interval),
+            update_interval=timedelta(seconds=entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL)),
         )
 
     def _fire_event(self, event_type: str, data: dict[str, Any] | None = None) -> None:
@@ -63,80 +78,54 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             event_data.update(data)
         self.hass.bus.async_fire(f"{DOMAIN}_{event_type}", event_data)
 
-    async def async_connect(self) -> bool:
-        """Connect to the device."""
-        from bleak import BleakClient
-        from homeassistant.components.bluetooth import async_ble_device_from_address
-        from idotmatrix import ConnectionManager
+    async def async_setup_client(self) -> None:
+        """Register connection listener, enable auto-reconnect, attempt initial connect."""
+        from idotmatrix.connection_manager import ConnectionListener
 
-        # habluetooth requires a BLEDevice object (not a plain MAC string) to
-        # route the connection to the correct adapter.
-        ble_device = async_ble_device_from_address(
-            self.hass, self.mac_address, connectable=True
-        )
-        if not ble_device:
+        self._client.add_connection_listener(ConnectionListener(
+            on_connected=self._on_connected,
+            on_disconnected=self._on_disconnected,
+        ))
+        self._client.set_auto_reconnect(True)
+        try:
+            await self._client.connect()
+        except Exception as ex:
             _LOGGER.debug(
-                "Device %s not in HA Bluetooth registry — not in range yet",
-                self.mac_address,
+                "Initial connect to %s failed, will retry automatically: %s",
+                self.mac_address, ex,
             )
-            return False
 
-        self._connection_manager = ConnectionManager()
-        self._connection_manager.address = self.mac_address
-        self._connection_manager.client = BleakClient(ble_device)
-        await self._connection_manager.client.connect()
-        return self._connection_manager.client.is_connected
+    async def _on_connected(self) -> None:
+        """Called by the library when the device connects."""
+        self._connected = True
+        self.hass.async_create_task(self.async_request_refresh())
 
-    async def async_disconnect(self) -> None:
-        """Disconnect from the device."""
-        if (
-            self._connection_manager is not None
-            and self._connection_manager.client is not None
-            and self._connection_manager.client.is_connected
-        ):
-            try:
-                await self._connection_manager.client.disconnect()
-            except Exception as ex:
-                _LOGGER.debug("Error disconnecting: %s", ex)
-            finally:
-                self._connection_manager.client = None
+    async def _on_disconnected(self) -> None:
+        """Called by the library when the device disconnects."""
+        self._connected = False
+        self.hass.async_create_task(self.async_request_refresh())
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Check device availability using HA's Bluetooth advertisement cache.
-
-        No connection is made — HA's scanner passively tracks nearby devices.
-        If the device is absent from the cache, entities go unavailable.
-        """
-        if not async_ble_device_from_address(self.hass, self.mac_address, connectable=True):
-            raise UpdateFailed(f"Device {self.mac_address} not seen recently — out of range or powered off")
+        """Return current state; raise UpdateFailed when not connected."""
+        if not self._connected:
+            raise UpdateFailed(f"Device {self.mac_address} not connected")
         return self._state.copy()
 
     async def _async_send_command(self, command_func, *args, **kwargs) -> bool:
-        """Connect, send a command, then disconnect.
-
-        BLE is not designed for persistent connections — connect-on-demand
-        avoids dropped-connection errors between commands.
-        """
+        """Execute a device command under the command lock."""
         async with self._command_lock:
             try:
-                if not await self.async_connect():
-                    _LOGGER.warning("Cannot reach %s — device may be off or out of range", self.mac_address)
-                    return False
                 await command_func(*args, **kwargs)
                 return True
             except Exception as ex:
                 _LOGGER.error("Error sending command to %s: %s", self.mac_address, ex)
                 return False
-            finally:
-                await self.async_disconnect()
 
-    # Display control methods
+    # Display control
 
     async def async_turn_on(self) -> bool:
         """Turn on the display."""
-        from idotmatrix import Common
-
-        success = await self._async_send_command(Common().screenOn)
+        success = await self._async_send_command(self._client.common.turn_on)
         if success:
             self._state["is_on"] = True
             self._fire_event("display_on")
@@ -144,9 +133,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_turn_off(self) -> bool:
         """Turn off the display."""
-        from idotmatrix import Common
-
-        success = await self._async_send_command(Common().screenOff)
+        success = await self._async_send_command(self._client.common.turn_off)
         if success:
             self._state["is_on"] = False
             self._fire_event("display_off")
@@ -154,14 +141,10 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         return success
 
     async def async_set_brightness(self, brightness: int) -> bool:
-        """Set the display brightness."""
-        from idotmatrix import Common
-
-        # Convert HA brightness (0-255) to device brightness (0-100)
-        device_brightness = int((brightness / 255) * 100)
-
+        """Set display brightness (HA 0–255 → device 5–100%)."""
+        device_brightness = max(5, int((brightness / 255) * 100))
         success = await self._async_send_command(
-            Common().setBrightness, device_brightness
+            self._client.common.set_brightness, device_brightness
         )
         if success:
             self._state["brightness"] = brightness
@@ -169,25 +152,31 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         return success
 
     async def async_set_screen_flip(self, flipped: bool) -> bool:
-        """Set screen rotation/flip."""
-        from idotmatrix import Common
-
-        success = await self._async_send_command(Common().flipScreen, flipped)
+        """Set screen rotation."""
+        success = await self._async_send_command(
+            self._client.common.set_screen_flipped, flipped
+        )
         if success:
             self._state["screen_flipped"] = flipped
             self._fire_event("screen_flipped", {"flipped": flipped})
         return success
 
-    # Text display methods
+    # Text
 
     async def async_display_text(
-        self, message: str, font_size: int = 12, color: tuple = (255, 255, 255), speed: int = 50
+        self,
+        message: str,
+        font_size: int = 12,
+        color: tuple = (255, 255, 255),
+        speed: int = 50,
     ) -> bool:
-        """Display text message."""
-        from idotmatrix import Text
-
+        """Display a scrolling text message."""
         success = await self._async_send_command(
-            Text().setMode, message, font_size=font_size, text_color=color, speed=speed
+            self._client.text.show_text,
+            message,
+            font_size=font_size,
+            text_color=color,
+            speed=speed,
         )
         if success:
             self._state["last_message"] = message
@@ -195,49 +184,39 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             self._fire_event("text_displayed", {"message": message})
         return success
 
-    # Clock methods
+    # Clock
 
     async def async_set_clock_mode(self, style: int) -> bool:
-        """Set clock display mode."""
-        from idotmatrix import Clock
-
-        success = await self._async_send_command(Clock().setMode, style)
+        """Set clock display style."""
+        success = await self._async_send_command(self._client.clock.show, style)
         if success:
             self._state["current_mode"] = "clock"
-            style_names = {0: "classic", 1: "digital", 2: "analog", 3: "minimal", 4: "colorful"}
-            self._state["clock_style"] = style_names.get(style, "classic")
+            self._state["clock_style"] = _CLOCK_STYLE_BY_ID.get(style, _DEFAULT_CLOCK_STYLE)
             self._fire_event("clock_mode_set", {"style": style})
         return success
 
     async def async_sync_time(self) -> bool:
         """Synchronize device time with Home Assistant."""
-        from idotmatrix import Common
-
-        now = datetime.now()
         return await self._async_send_command(
-            Common().setTime, now.year, now.month, now.day, now.hour, now.minute, now.second
+            self._client.common.set_time, datetime.now()
         )
 
-    # Effect methods
+    # Effects
 
     async def async_display_effect(self, effect_type: int) -> bool:
-        """Display visual effect."""
-        from idotmatrix import Effect
-
+        """Display a visual effect."""
         success = await self._async_send_command(
-            Effect().setMode, effect_type, [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
+            self._client.effect.show,
+            effect_type,
+            [(255, 0, 0), (0, 255, 0), (0, 0, 255)],
         )
         if success:
             self._state["current_mode"] = "effect"
-            effect_names = {
-                0: "rainbow", 1: "random_pixels", 2: "white", 3: "rainbow_vertical",
-                4: "diagonal_right", 5: "diagonal_left", 6: "random",
-            }
-            self._state["effect_mode"] = effect_names.get(effect_type, "rainbow")
+            self._state["effect_mode"] = _EFFECT_MODE_BY_ID.get(effect_type, _DEFAULT_EFFECT_MODE)
             self._fire_event("effect_displayed", {"effect_type": effect_type})
         return success
 
-    # Image display methods
+    # Image
 
     async def async_display_image(self, image_path: str, duration: int = 5) -> bool:
         """Display an image or GIF."""
@@ -245,61 +224,51 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self._fire_event("image_displayed", {"image_path": image_path})
         return True
 
-    # Chronograph methods
+    # Chronograph
 
     async def async_start_chronograph(self) -> bool:
-        """Start the chronograph."""
-        from idotmatrix import Chronograph
-
-        success = await self._async_send_command(Chronograph().setMode, 1)
+        """Start the chronograph from zero."""
+        success = await self._async_send_command(self._client.chronograph.start_from_zero)
         if success:
             self._state["current_mode"] = "chronograph"
             self._fire_event("chronograph_started")
         return success
 
     async def async_stop_chronograph(self) -> bool:
-        """Stop the chronograph."""
-        from idotmatrix import Chronograph
-
-        success = await self._async_send_command(Chronograph().setMode, 2)
+        """Pause the chronograph."""
+        success = await self._async_send_command(self._client.chronograph.pause)
         if success:
             self._fire_event("chronograph_stopped")
         return success
 
     async def async_reset_chronograph(self) -> bool:
         """Reset the chronograph."""
-        from idotmatrix import Chronograph
-
-        success = await self._async_send_command(Chronograph().setMode, 0)
+        success = await self._async_send_command(self._client.chronograph.reset)
         if success:
             self._fire_event("chronograph_reset")
         return success
 
     async def async_freeze_screen(self) -> bool:
         """Freeze the current display."""
-        from idotmatrix import Common
-
-        return await self._async_send_command(Common().freezeScreen)
+        return await self._async_send_command(self._client.common.freeze_screen)
 
     async def async_reset_device(self) -> bool:
-        """Reset the device."""
-        from idotmatrix import Common
-
-        success = await self._async_send_command(Common().reset)
+        """Reset the device to default state."""
+        success = await self._async_send_command(self._client.common.reset)
         if success:
             self._state.update({
                 "is_on": True,
                 "brightness": 255,
                 "screen_flipped": False,
                 "current_mode": "clock",
-                "clock_style": "classic",
+                "clock_style": _DEFAULT_CLOCK_STYLE,
             })
             self._fire_event("device_reset")
         return success
 
     @property
     def device_info(self) -> dict[str, Any]:
-        """Return device information."""
+        """Return device information for the HA device registry."""
         return {
             "identifiers": {(DOMAIN, self.mac_address)},
             "name": self.device_name,
@@ -310,6 +279,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         }
 
     async def async_shutdown(self) -> None:
-        """Shutdown the coordinator and disconnect from the device."""
+        """Stop auto-reconnect and disconnect cleanly."""
         _LOGGER.info("Shutting down iDotMatrix coordinator for %s", self.mac_address)
-        await self.async_disconnect()
+        self._client.set_auto_reconnect(False)
+        await self._client.disconnect()

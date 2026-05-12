@@ -37,7 +37,7 @@ class IDotMatrixClockStyleSelect(IDotMatrixEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         """Return the current option."""
-        return self.coordinator.data.get("clock_style", "classic")
+        return self.coordinator.data.get("clock_style", self._attr_options[0])
 
     async def async_select_option(self, option: str) -> None:
         """Select an option."""
@@ -59,7 +59,7 @@ class IDotMatrixEffectSelect(IDotMatrixEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         """Return the current option."""
-        return self.coordinator.data.get("effect_mode", "rainbow")
+        return self.coordinator.data.get("effect_mode", self._attr_options[0])
 
     async def async_select_option(self, option: str) -> None:
         """Select an option."""
