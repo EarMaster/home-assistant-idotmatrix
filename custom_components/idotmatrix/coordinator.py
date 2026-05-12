@@ -80,11 +80,26 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
     async def async_connect(self) -> bool:
         """Connect to the device."""
         try:
+            from bleak import BleakClient
+            from homeassistant.components.bluetooth import async_ble_device_from_address
             from idotmatrix import ConnectionManager
 
+            # HA's habluetooth requires a BLEDevice object, not a plain MAC string,
+            # to route the connection to the correct Bluetooth adapter/backend.
+            ble_device = async_ble_device_from_address(
+                self.hass, self.mac_address, connectable=True
+            )
+            if not ble_device:
+                _LOGGER.error(
+                    "Device %s not found in HA Bluetooth registry — ensure it is powered on and in range",
+                    self.mac_address,
+                )
+                return False
+
             self._connection_manager = ConnectionManager()
-            # connectByAddress sets self.address then calls connect()
-            await self._connection_manager.connectByAddress(self.mac_address)
+            self._connection_manager.address = self.mac_address
+            self._connection_manager.client = BleakClient(ble_device)
+            await self._connection_manager.client.connect()
 
             if self._is_connected():
                 self._connected = True
