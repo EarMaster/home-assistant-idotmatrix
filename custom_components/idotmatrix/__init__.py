@@ -11,7 +11,11 @@ from .coordinator import IDotMatrixDataUpdateCoordinator
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up iDotMatrix from a config entry."""
     coordinator = IDotMatrixDataUpdateCoordinator(hass, entry)
-    await coordinator.async_config_entry_first_refresh()
+    # Use async_refresh instead of async_config_entry_first_refresh so that setup
+    # succeeds even when the device is temporarily out of BT range (e.g. after an
+    # HA restart before the scanner has seen the advertisement). Entities will be
+    # unavailable until the device is seen again.
+    await coordinator.async_refresh()
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
