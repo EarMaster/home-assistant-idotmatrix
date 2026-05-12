@@ -145,7 +145,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Turn on the display."""
         from idotmatrix import Common
 
-        success = await self._async_send_command(Common().turn_on_device)
+        success = await self._async_send_command(Common().screenOn)
         if success:
             self._state["is_on"] = True
             self._fire_event("display_on")
@@ -155,7 +155,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Turn off the display."""
         from idotmatrix import Common
 
-        success = await self._async_send_command(Common().turn_off_device)
+        success = await self._async_send_command(Common().screenOff)
         if success:
             self._state["is_on"] = False
             self._fire_event("display_off")
@@ -170,7 +170,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         device_brightness = int((brightness / 255) * 100)
 
         success = await self._async_send_command(
-            Common().set_brightness, device_brightness
+            Common().setBrightness, device_brightness
         )
         if success:
             self._state["brightness"] = brightness
@@ -181,9 +181,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Set screen rotation/flip."""
         from idotmatrix import Common
 
-        success = await self._async_send_command(
-            Common().set_screen_rotation, 180 if flipped else 0
-        )
+        success = await self._async_send_command(Common().flipScreen, flipped)
         if success:
             self._state["screen_flipped"] = flipped
             self._fire_event("screen_flipped", {"flipped": flipped})
@@ -198,7 +196,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         from idotmatrix import Text
 
         success = await self._async_send_command(
-            Text().send_text, message, font_size=font_size, color=color, speed=speed
+            Text().setMode, message, font_size=font_size, text_color=color, speed=speed
         )
         if success:
             self._state["last_message"] = message
@@ -212,7 +210,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Set clock display mode."""
         from idotmatrix import Clock
 
-        success = await self._async_send_command(Clock().set_clock_style, style)
+        success = await self._async_send_command(Clock().setMode, style)
         if success:
             self._state["current_mode"] = "clock"
             style_names = {0: "classic", 1: "digital", 2: "analog", 3: "minimal", 4: "colorful"}
@@ -222,25 +220,27 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_sync_time(self) -> bool:
         """Synchronize device time with Home Assistant."""
-        from idotmatrix import Clock
+        from idotmatrix import Common
 
-        success = await self._async_send_command(Clock().sync_time, datetime.now())
-        return success
+        now = datetime.now()
+        return await self._async_send_command(
+            Common().setTime, now.year, now.month, now.day, now.hour, now.minute, now.second
+        )
 
     # Effect methods
 
-    async def async_display_effect(self, effect_type: int, duration: int = 10, speed: int = 50) -> bool:
+    async def async_display_effect(self, effect_type: int) -> bool:
         """Display visual effect."""
         from idotmatrix import Effect
 
         success = await self._async_send_command(
-            Effect().show_effect, effect_type, duration=duration, speed=speed
+            Effect().setMode, effect_type, [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
         )
         if success:
             self._state["current_mode"] = "effect"
             effect_names = {
-                0: "rainbow", 1: "breathing", 2: "wave", 3: "fire",
-                4: "snow", 5: "matrix", 6: "stars", 7: "plasma",
+                0: "rainbow", 1: "random_pixels", 2: "white", 3: "rainbow_vertical",
+                4: "diagonal_right", 5: "diagonal_left", 6: "random",
             }
             self._state["effect_mode"] = effect_names.get(effect_type, "rainbow")
             self._fire_event("effect_displayed", {"effect_type": effect_type})
@@ -260,7 +260,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Start the chronograph."""
         from idotmatrix import Chronograph
 
-        success = await self._async_send_command(Chronograph().start)
+        success = await self._async_send_command(Chronograph().setMode, 1)
         if success:
             self._state["current_mode"] = "chronograph"
             self._fire_event("chronograph_started")
@@ -270,7 +270,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Stop the chronograph."""
         from idotmatrix import Chronograph
 
-        success = await self._async_send_command(Chronograph().stop)
+        success = await self._async_send_command(Chronograph().setMode, 2)
         if success:
             self._fire_event("chronograph_stopped")
         return success
@@ -279,7 +279,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Reset the chronograph."""
         from idotmatrix import Chronograph
 
-        success = await self._async_send_command(Chronograph().reset)
+        success = await self._async_send_command(Chronograph().setMode, 0)
         if success:
             self._fire_event("chronograph_reset")
         return success
@@ -288,13 +288,13 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Freeze the current display."""
         from idotmatrix import Common
 
-        return await self._async_send_command(Common().freeze_screen)
+        return await self._async_send_command(Common().freezeScreen)
 
     async def async_reset_device(self) -> bool:
         """Reset the device."""
         from idotmatrix import Common
 
-        success = await self._async_send_command(Common().reset_device)
+        success = await self._async_send_command(Common().reset)
         if success:
             self._state.update({
                 "is_on": True,

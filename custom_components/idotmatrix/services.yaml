@@ -92,29 +92,12 @@ display_effect:
         select:
           options:
             - rainbow
-            - breathing
-            - wave
-            - fire
-            - snow
-            - matrix
-            - stars
-            - plasma
-    duration:
-      name: Duration
-      description: How long to run the effect (seconds)
-      default: 10
-      selector:
-        number:
-          min: 1
-          max: 300
-    speed:
-      name: Speed
-      description: Effect animation speed (1-100)
-      default: 50
-      selector:
-        number:
-          min: 1
-          max: 100
+            - random_pixels
+            - white
+            - rainbow_vertical
+            - diagonal_right
+            - diagonal_left
+            - random
 
 sync_time:
   name: Sync Time

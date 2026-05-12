@@ -40,16 +40,15 @@ CLOCK_STYLES = {
     "colorful": 4,
 }
 
-# Effect types mapping
+# Effect types mapping (styles 0-6 per idotmatrix library Effect.setMode)
 EFFECT_TYPES = {
     "rainbow": 0,
-    "breathing": 1,
-    "wave": 2,
-    "fire": 3,
-    "snow": 4,
-    "matrix": 5,
-    "stars": 6,
-    "plasma": 7,
+    "random_pixels": 1,
+    "white": 2,
+    "rainbow_vertical": 3,
+    "diagonal_right": 4,
+    "diagonal_left": 5,
+    "random": 6,
 }
 
 # Font sizes
