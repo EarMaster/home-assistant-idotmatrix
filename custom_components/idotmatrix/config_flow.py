@@ -135,9 +135,6 @@ class IDotMatrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Optional("manual_entry", default=False): bool,
                 }
             ),
-            description_placeholders={
-                "devices_found": len(self._discovered_devices),
-            },
         )
 
     async def async_step_manual(

@@ -14,7 +14,7 @@
       },
       "discovery": {
         "title": "Select Device",
-        "description": "Found {devices_found} iDotMatrix device(s). Select your device from the list below, or choose manual entry if your device is not listed.",
+        "description": "Select your iDotMatrix device from the list below, or choose manual entry if your device is not listed.",
         "data": {
           "device": "Select Device",
           "manual_entry": "Enter device manually instead"
