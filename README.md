@@ -16,7 +16,6 @@ A custom Home Assistant integration for iDotMatrix LED displays that provides de
 - **Screen Controls**: Flip/rotate screen orientation
 - **Chronograph**: Start, stop, and reset stopwatch functionality
 - **Time Synchronization**: Sync device time with Home Assistant
-- **Custom Services**: Advanced control through Home Assistant services
 
 ## Installation
 
@@ -34,24 +33,7 @@ A custom Home Assistant integration for iDotMatrix LED displays that provides de
 ### Manual Installation
 
 1. Download the latest release from GitHub
-2. Extract the files to your Home Assistant `custom_components` directory:
-   ```
-   config/
-     custom_components/
-       idotmatrix/
-         __init__.py
-         manifest.json
-         config_flow.py
-         coordinator.py
-         entity.py
-         light.py
-         switch.py
-         text.py
-         select.py
-         button.py
-         const.py
-         services.yaml
-   ```
+2. Extract the `idotmatrix` folder into your Home Assistant `config/custom_components/` directory
 3. Restart Home Assistant
 
 ## Configuration
@@ -75,6 +57,16 @@ If automatic discovery doesn't work:
 1. Find your device's MAC address (usually available in the device settings)
 2. Enter a friendly name for the device
 3. Enter the MAC address in the format `XX:XX:XX:XX:XX:XX`
+
+### Options
+
+After setup, the following options can be configured via **Settings → Devices & Services → iDotMatrix → Configure**:
+
+| Option | Default | Description |
+|---|---|---|
+| Scan interval | 30 s | How often HA checks whether the device is in Bluetooth range |
+| Connection timeout | 30 s | Maximum time to wait when connecting to the device |
+| Retry attempts | 3 | How many times a failed BLE command is retried before giving up |
 
 ## Usage
 
@@ -100,81 +92,9 @@ Once configured, the integration creates several entities:
 - **Start/Stop/Reset Chronograph**: Control stopwatch functionality
 - **Sync Time**: Synchronize device time with Home Assistant
 
-## Services
-
-The integration provides several custom services for advanced control:
-
-### `idotmatrix.display_text`
-Display a custom text message with formatting options.
-
-**Parameters:**
-- `message` (required): Text message to display
-- `font_size` (optional): Font size (small, medium, large)
-- `color` (optional): Text color (name or RGB values)
-- `speed` (optional): Animation speed (1-100)
-
-**Example:**
-```yaml
-service: idotmatrix.display_text
-data:
-  message: "Hello World!"
-  font_size: large
-  color: blue
-  speed: 75
-```
-
-### `idotmatrix.display_image`
-Display an image or GIF file.
-
-**Parameters:**
-- `image_path` (required): Path to the image file
-- `duration` (optional): Display duration in seconds
-
-**Example:**
-```yaml
-service: idotmatrix.display_image
-data:
-  image_path: "/config/www/images/weather.gif"
-  duration: 10
-```
-
-### `idotmatrix.set_clock_mode`
-Set the clock display style.
-
-**Parameters:**
-- `clock_style` (required): Clock style. Available values: `RGB Swipe Outline`, `Christmas Tree`, `Checkers`, `Color`, `Hourglass`, `Alarm Clock`, `Outlines`, `RGB Corners`
-
-**Example:**
-```yaml
-service: idotmatrix.set_clock_mode
-data:
-  clock_style: Hourglass
-```
-
-### `idotmatrix.display_effect`
-Display a visual effect.
-
-**Parameters:**
-- `effect_type` (required): Effect type. Available values: `Horizontal Rainbow`, `Random Colored Pixels`, `White on Changing BG`, `Vertical Rainbow`, `Diagonal Right Rainbow`, `Diagonal Left Rainbow`, `Random Colored`
-
-**Example:**
-```yaml
-service: idotmatrix.display_effect
-data:
-  effect_type: Horizontal Rainbow
-```
-
-### `idotmatrix.sync_time`
-Synchronize device time with Home Assistant.
-
-**Example:**
-```yaml
-service: idotmatrix.sync_time
-```
-
 ## Automations
 
-Here are some example automations using the integration:
+Here are some example automations using the integration. Replace entity IDs with the ones from your own device.
 
 ### Display Weather Information
 ```yaml
@@ -184,11 +104,11 @@ automation:
       - platform: time
         at: "07:00:00"
     action:
-      - service: idotmatrix.display_text
+      - action: text.set_value
+        target:
+          entity_id: text.idotmatrix_message
         data:
-          message: "{{ states('weather.home') }} {{ state_attr('weather.home', 'temperature') }}°C"
-          color: cyan
-          font_size: medium
+          value: "{{ states('weather.home') }} {{ state_attr('weather.home', 'temperature') }}°C"
 ```
 
 ### Birthday Reminder
@@ -200,15 +120,17 @@ automation:
         event: start
         entity_id: calendar.birthdays
     action:
-      - service: idotmatrix.display_effect
+      - action: select.select_option
+        target:
+          entity_id: select.idotmatrix_effect_mode
         data:
-          effect_type: stars
-          duration: 60
+          option: Horizontal Rainbow
       - delay: "00:01:00"
-      - service: idotmatrix.display_text
+      - action: text.set_value
+        target:
+          entity_id: text.idotmatrix_message
         data:
-          message: "Happy Birthday!"
-          color: pink
+          value: "Happy Birthday!"
 ```
 
 ### Door Notification
@@ -220,11 +142,11 @@ automation:
         entity_id: binary_sensor.front_door
         to: "on"
     action:
-      - service: idotmatrix.display_text
+      - action: text.set_value
+        target:
+          entity_id: text.idotmatrix_message
         data:
-          message: "Door Opened"
-          color: yellow
-          speed: 100
+          value: "Door Opened"
 ```
 
 ## Troubleshooting
@@ -242,9 +164,9 @@ automation:
 - Ensure the device is within Bluetooth range
 
 ### Commands Not Working
-- Check that the device is connected (entity should show as "available")
-- Verify you're using the correct service parameters
-- Try reconnecting the device through the integration settings
+- Check that the device entities show as "available" in Home Assistant
+- Make sure the device is in Bluetooth range when sending a command
+- Try reloading the integration via **Settings → Devices & Services → iDotMatrix → Reload**
 
 ### Getting Device MAC Address
 1. Use your phone's Bluetooth settings to scan for devices
