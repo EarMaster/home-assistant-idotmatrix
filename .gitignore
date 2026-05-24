@@ -213,6 +213,9 @@ debug.log
 # HACS specific (if applicable)
 .translations/
 
+# Claude Code local settings (personal, not project-level)
+.claude/settings.local.json
+
 # Local configuration files that shouldn't be committed
 config.yaml
 configuration.yaml
