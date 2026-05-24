@@ -119,6 +119,13 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 return True
             except Exception as ex:
                 _LOGGER.error("Error sending command to %s: %s", self.mac_address, ex)
+                if self._connected:
+                    _LOGGER.warning(
+                        "Command failed for %s — marking disconnected and waiting for auto-reconnect",
+                        self.mac_address,
+                    )
+                    self._connected = False
+                    self.hass.async_create_task(self.async_request_refresh())
                 return False
 
     # Display control
