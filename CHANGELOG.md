@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.6] - 2026-05-25
+
+### Fixed
+- **Devices failed to connect on HA 2025.x** with "No backend with an available connection slot that can reach address X was found". HA's Bluetooth subsystem requires a `BLEDevice` object from its scan cache rather than a raw MAC string. The coordinator now uses `bluetooth.async_ble_device_from_address()` and `bleak_retry_connector.establish_connection()`, injecting the resulting authenticated client into the library's `ConnectionManager`, bypassing the library's own broken connection path entirely.
+- Shutdown disconnect now operates on the injected `BleakClient` directly rather than calling the library's `disconnect()`.
+
 ## [1.1.5] - 2026-05-25
 
 ### Fixed
