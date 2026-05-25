@@ -96,6 +96,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
         ble_device = bluetooth.async_ble_device_from_address(
             self.hass, self.mac_address, connectable=True
+        ) or bluetooth.async_ble_device_from_address(
+            self.hass, self.mac_address, connectable=False
         )
         if ble_device is None:
             raise ValueError(

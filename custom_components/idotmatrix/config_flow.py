@@ -87,9 +87,11 @@ class IDotMatrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         return await self.async_step_configure()
             return await self.async_step_manual()
 
-        # Use HA's Bluetooth subsystem — avoids spawning a competing BleakScanner
+        # Use HA's Bluetooth subsystem — avoids spawning a competing BleakScanner.
+        # connectable=False includes passive-scan entries (e.g. ESPHome proxies) alongside
+        # directly-connectable ones, so we see the device regardless of how HA found it.
         already_configured = self._async_current_ids()
-        discovered = bluetooth.async_discovered_service_info(self.hass, connectable=True)
+        discovered = bluetooth.async_discovered_service_info(self.hass, connectable=False)
         self._discovered_devices = [
             {
                 "name": svc.name or f"iDotMatrix {svc.address[-5:]}",
