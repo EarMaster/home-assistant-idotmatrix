@@ -88,7 +88,10 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         ))
         self._client.set_auto_reconnect(True)
         try:
-            await self._client.connect()
+            # Bypass IDotMatrixClient.connect() → connect_by_address() → set_address() which
+            # tries self.client._backend.address = address but _backend is None in Bleak ≥0.22
+            # until after connect(). Go directly to ConnectionManager.connect() instead.
+            await self._client._connection_manager.connect()
         except Exception as ex:
             _LOGGER.info(
                 "Initial connect to %s failed, will retry automatically: %s",
@@ -117,7 +120,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         if not self._connected:
             _LOGGER.debug("Device %s not connected, attempting reconnect", self.mac_address)
             try:
-                await self._client.connect()
+                await self._client._connection_manager.connect()
             except Exception as ex:
                 _LOGGER.debug("Reconnect attempt failed for %s: %s", self.mac_address, ex)
         return self._state.copy()
@@ -127,7 +130,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         if not self._connected:
             _LOGGER.debug("Not connected to %s, attempting reconnect before command", self.mac_address)
             try:
-                await self._client.connect()
+                await self._client._connection_manager.connect()
             except Exception:
                 pass
         async with self._command_lock:
