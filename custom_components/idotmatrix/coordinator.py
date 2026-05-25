@@ -9,7 +9,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
     CLOCK_STYLES,
@@ -105,25 +105,32 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self._connected = False
         self.hass.async_create_task(self.async_request_refresh())
 
+    @property
+    def connected(self) -> bool:
+        """Return True if the BLE device is currently connected."""
+        return self._connected
+
     async def _async_update_data(self) -> dict[str, Any]:
-        """Return current state; raise UpdateFailed when not connected."""
+        """Return cached state; never raises so entities stay available via coordinator.connected."""
         if not self._connected:
-            raise UpdateFailed(f"Device {self.mac_address} not connected")
+            _LOGGER.debug("Device %s not connected, returning cached state", self.mac_address)
         return self._state.copy()
 
     async def _async_send_command(self, command_func, *args, **kwargs) -> bool:
-        """Execute a device command under the command lock."""
+        """Execute a device command under the command lock, reconnecting first if needed."""
+        if not self._connected:
+            _LOGGER.debug("Not connected to %s, attempting reconnect before command", self.mac_address)
+            try:
+                await self._client.connect()
+            except Exception:
+                pass
         async with self._command_lock:
             try:
                 await command_func(*args, **kwargs)
                 return True
             except Exception as ex:
-                _LOGGER.error("Error sending command to %s: %s", self.mac_address, ex)
+                _LOGGER.warning("Command failed for %s: %s", self.mac_address, ex)
                 if self._connected:
-                    _LOGGER.warning(
-                        "Command failed for %s — marking disconnected and waiting for auto-reconnect",
-                        self.mac_address,
-                    )
                     self._connected = False
                     self.hass.async_create_task(self.async_request_refresh())
                 return False
