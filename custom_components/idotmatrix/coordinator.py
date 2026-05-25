@@ -90,18 +90,20 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             await self._client.connect()
         except Exception as ex:
-            _LOGGER.debug(
+            _LOGGER.info(
                 "Initial connect to %s failed, will retry automatically: %s",
                 self.mac_address, ex,
             )
 
     async def _on_connected(self) -> None:
         """Called by the library when the device connects."""
+        _LOGGER.info("Device %s connected", self.mac_address)
         self._connected = True
         self.hass.async_create_task(self.async_request_refresh())
 
     async def _on_disconnected(self) -> None:
         """Called by the library when the device disconnects."""
+        _LOGGER.info("Device %s disconnected, waiting for auto-reconnect", self.mac_address)
         self._connected = False
         self.hass.async_create_task(self.async_request_refresh())
 
@@ -111,9 +113,13 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         return self._connected
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Return cached state; never raises so entities stay available via coordinator.connected."""
+        """Return cached state; attempt reconnect each poll cycle if disconnected."""
         if not self._connected:
-            _LOGGER.debug("Device %s not connected, returning cached state", self.mac_address)
+            _LOGGER.debug("Device %s not connected, attempting reconnect", self.mac_address)
+            try:
+                await self._client.connect()
+            except Exception as ex:
+                _LOGGER.debug("Reconnect attempt failed for %s: %s", self.mac_address, ex)
         return self._state.copy()
 
     async def _async_send_command(self, command_func, *args, **kwargs) -> bool:
