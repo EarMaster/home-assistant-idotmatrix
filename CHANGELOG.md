@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-05-25
+
+### Fixed
+- **Devices never connected** due to a Bleak ≥0.22 incompatibility in the upstream library. `connect_by_address()` tried to mutate `BleakClient._backend.address`, but `_backend` is `None` until after `connect()` completes in newer Bleak versions. Fixed by calling `ConnectionManager.connect()` directly, bypassing the broken `set_address()` path entirely.
+
 ## [1.1.4] - 2026-05-25
 
 ### Fixed
