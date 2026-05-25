@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.7] - 2026-05-25
+
+### Fixed
+- **Device not found in HA Bluetooth scan cache** even though it was visible in HA's Bluetooth device list. `async_ble_device_from_address` with `connectable=True` returns `None` for devices that were only seen by a passive Bluetooth observer (e.g. an ESPHome Bluetooth proxy in passive mode). Both the coordinator and the config flow discovery now fall back to `connectable=False`, which returns the passive-scan entry and lets `bleak_retry_connector` find the best connection path.
+
 ## [1.1.6] - 2026-05-25
 
 ### Fixed
