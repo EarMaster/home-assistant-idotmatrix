@@ -79,36 +79,50 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self.hass.bus.async_fire(f"{DOMAIN}_{event_type}", event_data)
 
     async def async_setup_client(self) -> None:
-        """Register connection listener, enable auto-reconnect, attempt initial connect."""
-        from idotmatrix.connection_manager import ConnectionListener
-
-        self._client.add_connection_listener(ConnectionListener(
-            on_connected=self._on_connected,
-            on_disconnected=self._on_disconnected,
-        ))
-        self._client.set_auto_reconnect(True)
+        """Attempt initial BLE connection; poll will retry if device is not yet in range."""
         try:
-            # Bypass IDotMatrixClient.connect() → connect_by_address() → set_address() which
-            # tries self.client._backend.address = address but _backend is None in Bleak ≥0.22
-            # until after connect(). Go directly to ConnectionManager.connect() instead.
-            await self._client._connection_manager.connect()
+            await self._ble_connect()
         except Exception as ex:
             _LOGGER.info(
-                "Initial connect to %s failed, will retry automatically: %s",
+                "Initial connect to %s failed, will retry on next poll: %s",
                 self.mac_address, ex,
             )
 
-    async def _on_connected(self) -> None:
-        """Called by the library when the device connects."""
-        _LOGGER.info("Device %s connected", self.mac_address)
+    async def _ble_connect(self) -> None:
+        """Connect via HA Bluetooth + bleak-retry-connector and inject client into library."""
+        from homeassistant.components import bluetooth
+        from bleak import BleakClient
+        from bleak_retry_connector import establish_connection
+
+        ble_device = bluetooth.async_ble_device_from_address(
+            self.hass, self.mac_address, connectable=True
+        )
+        if ble_device is None:
+            raise ValueError(
+                f"Device {self.mac_address} not found in HA Bluetooth scan cache"
+            )
+
+        cm = self._client._connection_manager
+        client = await establish_connection(
+            BleakClient,
+            ble_device,
+            self.mac_address,
+            disconnected_callback=self._on_ble_disconnected,
+            max_attempts=3,
+        )
+        # Inject the connected client so the library's protocol modules can send data.
+        cm.client = client
+        cm._connected = True
         self._connected = True
+        _LOGGER.info("Device %s connected", self.mac_address)
         self.hass.async_create_task(self.async_request_refresh())
 
-    async def _on_disconnected(self) -> None:
-        """Called by the library when the device disconnects."""
-        _LOGGER.info("Device %s disconnected, waiting for auto-reconnect", self.mac_address)
-        self._connected = False
-        self.hass.async_create_task(self.async_request_refresh())
+    def _on_ble_disconnected(self, client: "BleakClient") -> None:
+        """Called by Bleak when the device disconnects."""
+        if self._connected:
+            self._connected = False
+            _LOGGER.info("Device %s disconnected", self.mac_address)
+            self.hass.async_create_task(self.async_request_refresh())
 
     @property
     def connected(self) -> bool:
@@ -120,7 +134,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         if not self._connected:
             _LOGGER.debug("Device %s not connected, attempting reconnect", self.mac_address)
             try:
-                await self._client._connection_manager.connect()
+                await self._ble_connect()
             except Exception as ex:
                 _LOGGER.debug("Reconnect attempt failed for %s: %s", self.mac_address, ex)
         return self._state.copy()
@@ -130,7 +144,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         if not self._connected:
             _LOGGER.debug("Not connected to %s, attempting reconnect before command", self.mac_address)
             try:
-                await self._client._connection_manager.connect()
+                await self._ble_connect()
             except Exception:
                 pass
         async with self._command_lock:
@@ -302,7 +316,11 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         }
 
     async def async_shutdown(self) -> None:
-        """Stop auto-reconnect and disconnect cleanly."""
+        """Disconnect the BLE client cleanly on HA shutdown."""
         _LOGGER.info("Shutting down iDotMatrix coordinator for %s", self.mac_address)
-        self._client.set_auto_reconnect(False)
-        await self._client.disconnect()
+        cm = self._client._connection_manager
+        if cm.client is not None and cm.client.is_connected:
+            try:
+                await cm.client.disconnect()
+            except Exception as ex:
+                _LOGGER.debug("Error during shutdown disconnect: %s", ex)
