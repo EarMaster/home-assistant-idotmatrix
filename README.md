@@ -79,8 +79,13 @@ Once configured, the integration creates several entities:
 ### Switch Entity
 - **Screen Flip**: Toggle screen rotation/flip
 
-### Text Entity
-- **Message**: Send text messages to display
+### Text Entities
+- **Message**: Send scrolling text messages to the display
+- **Display Image**: Send any image (PNG, JPEG, BMP, WebP, or animated GIF) by setting a local file path or http(s) URL. Static images are automatically sharpened before upload to improve legibility at small pixel counts.
+- **Icon & Message**: Display an icon in the top portion of the screen with a scrolling text message below. Format: `<icon_source>|<message>`. The icon source can be:
+  - An MDI icon name: `mdi:home`, `mdi:thermometer`, `mdi:weather-sunny` — the MDI webfont is downloaded and cached automatically on first use
+  - A local file path: `/config/www/icons/home.png`
+  - An http(s) URL
 
 ### Select Entities
 - **Clock Style**: Choose between different clock display styles
@@ -147,6 +152,52 @@ automation:
           entity_id: text.idotmatrix_message
         data:
           value: "Door Opened"
+```
+
+### Display an Image
+```yaml
+automation:
+  - alias: "Show Logo on Startup"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - action: text.set_value
+        target:
+          entity_id: text.idotmatrix_display_image
+        data:
+          value: "/config/www/logo.png"
+```
+
+### Icon & Message — Door Alert
+```yaml
+automation:
+  - alias: "Front Door Icon Alert"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.front_door
+        to: "on"
+    action:
+      - action: text.set_value
+        target:
+          entity_id: text.idotmatrix_icon_message
+        data:
+          value: "mdi:door-open|Front door open"
+```
+
+### Icon & Message — Temperature Display
+```yaml
+automation:
+  - alias: "Show Temperature"
+    trigger:
+      - platform: state
+        entity_id: sensor.living_room_temperature
+    action:
+      - action: text.set_value
+        target:
+          entity_id: text.idotmatrix_icon_message
+        data:
+          value: "mdi:thermometer|{{ states('sensor.living_room_temperature') }}°C"
 ```
 
 ## Troubleshooting
