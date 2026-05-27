@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-05-27
+
+### Added
+- **Display Image** entity (`text`): send any PNG, JPEG, BMP, WebP, or animated GIF to the display by setting a local file path or http(s) URL. Static images are sharpened with an unsharp mask before upload to improve legibility on the small LED canvas. GIFs pass through to the device's native GIF module.
+- **Icon & Message** entity (`text`): display an icon in the top ~55 % of the screen with a scrolling text message in the bottom strip. The composite is uploaded as an animated GIF within the device limits (≤ 64 frames, ≤ 2 000 ms). Icon source accepts:
+  - MDI icon names (`mdi:home`, `mdi:thermometer`, `mdi:weather-sunny`, …) — the MDI webfont and CSS codepoint map are downloaded from jsDelivr CDN and cached in `.storage/` on first use
+  - Local file paths (`/config/www/icons/home.png`)
+  - http(s) URLs
+- `async_display_image` in the coordinator is now fully implemented (was previously a no-op stub).
+
 ## [1.1.7] - 2026-05-25
 
 ### Fixed
