@@ -1,6 +1,8 @@
 """Text platform for iDotMatrix integration."""
 from __future__ import annotations
 
+import logging
+
 from homeassistant.components.text import TextEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -9,6 +11,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .coordinator import IDotMatrixDataUpdateCoordinator
 from .entity import IDotMatrixEntity
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -109,6 +113,9 @@ class IDotMatrixIconMessage(IDotMatrixEntity, TextEntity):
     async def async_set_value(self, value: str) -> None:
         """Parse 'icon_path|message' and display the composite animation."""
         if "|" not in value:
+            _LOGGER.warning(
+                "Icon & Message value must be in format 'icon_source|message', got: %r", value
+            )
             return
         icon_source, _, message = value.partition("|")
         icon_source = icon_source.strip()
