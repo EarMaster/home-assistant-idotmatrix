@@ -15,8 +15,6 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 
 ## Development workflow
 
-**Testing changes:** Use the `/trigger-update` skill (`.claude/commands/trigger-update.md`). It calls the HA REST API to trigger a HACS update and reload the integration, using env vars `$HA_HOST` and `$HA_TOKEN`.
-
 **Releasing:** Use the `/release` skill (`.claude/commands/release.md`). It groups uncommitted changes into conventional commits, updates `manifest.json` version + `CHANGELOG.md`, tags, and pushes. GitHub Actions (`release.yml`) then creates the GitHub release automatically on tag push. HACS uses `hacs.json` for discovery.
 
 **Smoke-testing without HA:** Run `python test_integration.py`. It mocks both `homeassistant.*` and `idotmatrix.*` via `sys.modules` before importing, so it works without a real HA instance or Bluetooth hardware.
