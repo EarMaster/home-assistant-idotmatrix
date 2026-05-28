@@ -124,6 +124,15 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             disconnected_callback=self._on_ble_disconnected,
             max_attempts=3,
         )
+        # Suppress response reads: the library calls read_gatt_char() after every write
+        # to check for a response, but on this device that characteristic is write-only.
+        # The resulting "Read not permitted" GATT error causes the device to drop the
+        # connection before the library's own error handler can catch it.  The library
+        # ignores the response data anyway, so returning empty bytes is safe.
+        async def _suppress_read(char, *args, **kwargs):
+            return b""
+        client.read_gatt_char = _suppress_read
+
         # Inject the connected client so the library's protocol modules can send data.
         cm.client = client
         cm._connected = True
@@ -155,8 +164,14 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_send_command(self, command_func, *args, **kwargs) -> bool:
         """Execute a device command under the command lock, reconnecting first if needed."""
-        if not self._connected:
-            _LOGGER.debug("Not connected to %s, attempting reconnect before command", self.mac_address)
+        cm = self._client._connection_manager
+        if not self._connected or not (cm.client and cm.client.is_connected):
+            if self._connected:
+                # BleakClient went stale without firing the disconnect callback
+                _LOGGER.debug("Stale BLE client detected for %s, reconnecting", self.mac_address)
+                self._connected = False
+            else:
+                _LOGGER.debug("Not connected to %s, attempting reconnect before command", self.mac_address)
             try:
                 await self._ble_connect()
             except Exception:
