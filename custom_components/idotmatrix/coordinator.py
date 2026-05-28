@@ -7,13 +7,14 @@ import logging
 import math
 import os
 import tempfile
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+import homeassistant.util.dt as dt_util
 
 from .const import (
     CLOCK_STYLES,
@@ -142,6 +143,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self._connected = True
         _LOGGER.info("Device %s connected", self.mac_address)
         self.hass.async_create_task(self.async_request_refresh())
+        self.hass.async_create_task(self.async_sync_time())
 
     def _on_ble_disconnected(self, client: "BleakClient") -> None:
         """Called by Bleak when the device disconnects."""
@@ -272,7 +274,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
     async def async_sync_time(self) -> bool:
         """Synchronize device time with Home Assistant."""
         return await self._async_send_command(
-            self._client.common.set_time, datetime.now()
+            self._client.common.set_time, dt_util.now().replace(tzinfo=None)
         )
 
     # Effects
