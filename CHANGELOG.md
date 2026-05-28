@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-05-28
+
+### Fixed
+- Text display now works: the library's font file (`Rain-DRM3.otf`) is not shipped with the pip package, so every `show_text` call raised `OSError: cannot open resource`. The coordinator now downloads and caches the font on first use.
+- `OSError` and other non-BLE exceptions in `_async_send_command` no longer trigger a spurious BLE disconnect/reconnect cycle. Only errors where `client.is_connected` is `False` actually mark the device as disconnected.
+- Icon & Message entity logs a `WARNING` instead of silently returning when the value is missing the required `|` separator (e.g. `mdi:home|Hello`).
+
 ## [1.2.1] - 2026-05-28
 
 ### Fixed
