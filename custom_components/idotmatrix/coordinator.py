@@ -35,6 +35,9 @@ _EFFECT_MODE_BY_ID = {v: k for k, v in EFFECT_TYPES.items()}
 
 _MDI_FONT_URL = "https://cdn.jsdelivr.net/npm/@mdi/font@latest/fonts/materialdesignicons-webfont.ttf"
 _MDI_CSS_URL = "https://cdn.jsdelivr.net/npm/@mdi/font@latest/css/materialdesignicons.css"
+# The library's font file is not included in its pip package (fonts/ dir is at repo root,
+# excluded from pyproject.toml).  We download and cache it on first use instead.
+_TEXT_FONT_URL = "https://raw.githubusercontent.com/markusressel/idotmatrix-api-client/main/fonts/Rain-DRM3.otf"
 
 
 class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
@@ -182,7 +185,10 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 return True
             except Exception as ex:
                 _LOGGER.warning("Command failed for %s: %s", self.mac_address, ex)
-                if self._connected:
+                # Only mark as disconnected if the BLE client is actually gone;
+                # non-BLE errors (e.g. PIL OSError for a missing font file) must
+                # not trigger a spurious disconnect/reconnect cycle.
+                if self._connected and not (cm.client and cm.client.is_connected):
                     self._connected = False
                     self.hass.async_create_task(self.async_request_refresh())
                 return False
@@ -237,9 +243,11 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         speed: int = 50,
     ) -> bool:
         """Display a scrolling text message."""
+        font_path = await self._ensure_text_font()
         success = await self._async_send_command(
             self._client.text.show_text,
             message,
+            font_path=font_path,
             font_size=font_size,
             text_color=color,
             speed=speed,
@@ -386,6 +394,20 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         out = io.BytesIO()
         img.save(out, format="PNG")
         return out.getvalue()
+
+    async def _ensure_text_font(self) -> str:
+        """Return the path to the text font, downloading and caching it on first use."""
+        font_path = self.hass.config.path(".storage/idotmatrix_text_font.otf")
+        exists = await self.hass.async_add_executor_job(os.path.exists, font_path)
+        if not exists:
+            _LOGGER.info("Downloading idotmatrix text font from library repo")
+            font_data = await self._fetch_image_data(_TEXT_FONT_URL)
+            def _write(data: bytes) -> None:
+                os.makedirs(os.path.dirname(font_path), exist_ok=True)
+                with open(font_path, "wb") as fh:
+                    fh.write(data)
+            await self.hass.async_add_executor_job(_write, font_data)
+        return font_path
 
     async def _fetch_image_data(self, source: str) -> bytes:
         """Return raw bytes from a local file path or http(s) URL."""
