@@ -143,8 +143,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         # write to use Write Without Response — the device receives all bytes identically
         # and the library never inspects the write acknowledgment.
         _orig_write = client.write_gatt_char
-        async def _write_no_response(char, data, response=False, **kwargs):
-            return await _orig_write(char, data, response=False, **kwargs)
+        async def _write_no_response(*args, response=False, **kwargs):
+            return await _orig_write(*args, response=False, **kwargs)
         client.write_gatt_char = _write_no_response
 
         # Inject the connected client so the library's protocol modules can send data.
