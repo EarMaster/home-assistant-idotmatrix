@@ -137,6 +137,16 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             return b""
         client.read_gatt_char = _suppress_read
 
+        # The write characteristic only supports Write Without Response.  The library's
+        # GIF and image upload paths call write_gatt_char(..., response=True) which would
+        # trigger a "Write not permitted" GATT error and drop the connection.  Force every
+        # write to use Write Without Response — the device receives all bytes identically
+        # and the library never inspects the write acknowledgment.
+        _orig_write = client.write_gatt_char
+        async def _write_no_response(char, data, response=False, **kwargs):
+            return await _orig_write(char, data, response=False, **kwargs)
+        client.write_gatt_char = _write_no_response
+
         # Inject the connected client so the library's protocol modules can send data.
         cm.client = client
         cm._connected = True
@@ -240,7 +250,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
     async def async_display_text(
         self,
         message: str,
-        font_size: int = 12,
+        font_size: int = 24,
         color: tuple = (255, 255, 255),
         speed: int = 50,
     ) -> bool:
