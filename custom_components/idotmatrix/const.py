@@ -14,7 +14,7 @@ DEFAULT_SCAN_INTERVAL = 30
 DEFAULT_SCREEN_SIZE = "32x32"
 
 # Platforms
-PLATFORMS = ["light", "switch", "text", "select", "button"]
+PLATFORMS = ["light", "switch", "text", "select", "button", "sensor"]
 
 # Screen sizes (display label → ScreenSize enum member name)
 SCREEN_SIZES = {
