@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-05-31
+
+### Added
+- **Current Mode sensor**: new read-only entity showing which content is currently active on the display (`clock`, `text`, `effect`, `image`, or `chronograph`)
+
+### Fixed
+- **Image and Icon & Message now work**: all GATT writes are forced to Write Without Response. The device's write characteristic does not support Write with Acknowledgment; the library's GIF and image upload paths were using `response=True`, causing a silent GATT error and leaving the display unchanged.
+- **Text inter-character spacing**: default font size raised from 12 to 24. At size 12 the `Rain-DRM3.otf` glyphs rendered as ~8×8 px inside the library's fixed 16×32 px per-character cell, leaving large empty gaps between characters. At size 24 the glyphs fill the full 16 px cell width.
+
 ## [1.2.3] - 2026-05-28
 
 ### Fixed
