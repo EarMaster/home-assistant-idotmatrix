@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-05-31
+
+### Added
+- **Display Mode select**: replaces the v1.3.0 read-only sensor with an interactive select entity. Shows the active mode (`clock`, `text`, `effect`, `image`, `chronograph`) and lets you switch back to any mode — selecting one re-activates the last content sent for that type. The value updates automatically whenever any other entity changes the display, so no separate "Auto" mode is needed.
+
+### Changed
+- Removed the `Current Mode` sensor entity introduced in v1.3.0 (superseded by Display Mode select above). If you were using `sensor.idotmatrix_current_mode` in automations, update the reference to `select.idotmatrix_current_mode`.
+
 ## [1.3.1] - 2026-05-31
 
 ### Fixed
