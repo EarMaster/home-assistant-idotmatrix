@@ -87,10 +87,8 @@ Once configured, the integration creates several entities:
   - A local file path: `/config/www/icons/home.png`
   - An http(s) URL
 
-### Sensor Entity
-- **Current Mode**: Read-only sensor showing which content is currently active on the display. Possible values: `clock`, `text`, `effect`, `image`, `chronograph`
-
 ### Select Entities
+- **Display Mode**: Shows which content is currently active (`clock`, `text`, `effect`, `image`, `chronograph`) and lets you switch between modes. Selecting a mode re-activates the last content sent for that type (e.g. selecting `clock` re-sends the current clock style; selecting `text` re-sends the last scrolling message). The value updates automatically whenever any other entity changes what is shown on the display.
 - **Clock Style**: Choose between different clock display styles
 - **Effect Mode**: Select visual effects
 

@@ -19,9 +19,58 @@ async def async_setup_entry(
     """Set up the select platform."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
     async_add_entities([
+        IDotMatrixDisplayModeSelect(coordinator),
         IDotMatrixClockStyleSelect(coordinator),
         IDotMatrixEffectSelect(coordinator),
     ])
+
+
+class IDotMatrixDisplayModeSelect(IDotMatrixEntity, SelectEntity):
+    """Select that shows the active display mode and lets you switch between modes.
+
+    Selecting a mode re-activates the last content sent for that mode (e.g.
+    selecting 'clock' re-sends the current clock style; selecting 'text'
+    re-sends the last scrolling message).  The option always reflects what is
+    currently on the display — it updates automatically whenever any other
+    entity (Message, Clock Style, Effect Mode, …) changes the content.
+    """
+
+    _MODES = ["clock", "text", "effect", "image", "chronograph"]
+
+    def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "current_mode")
+        self._attr_name = "Display Mode"
+        self._attr_icon = "mdi:monitor-dashboard"
+        self._attr_options = self._MODES
+
+    @property
+    def current_option(self) -> str | None:
+        return self.coordinator.data.get("current_mode", "clock")
+
+    async def async_select_option(self, option: str) -> None:
+        if option == "clock":
+            style_name = self.coordinator.data.get("clock_style", next(iter(CLOCK_STYLES)))
+            await self.coordinator.async_set_clock_mode(CLOCK_STYLES[style_name])
+        elif option == "text":
+            msg = self.coordinator.data.get("last_message", "")
+            if msg:
+                await self.coordinator.async_display_text(msg)
+        elif option == "effect":
+            effect_name = self.coordinator.data.get("effect_mode", next(iter(EFFECT_TYPES)))
+            await self.coordinator.async_display_effect(EFFECT_TYPES[effect_name])
+        elif option == "image":
+            src = self.coordinator.data.get("last_image", "")
+            icon_msg = self.coordinator.data.get("last_icon_message", "")
+            if src:
+                await self.coordinator.async_display_image(src)
+            elif icon_msg and "|" in icon_msg:
+                icon_source, _, message = icon_msg.partition("|")
+                await self.coordinator.async_display_icon_message(
+                    icon_source.strip(), message.strip()
+                )
+        elif option == "chronograph":
+            await self.coordinator.async_start_chronograph()
+        await self.coordinator.async_request_refresh()
 
 
 class IDotMatrixClockStyleSelect(IDotMatrixEntity, SelectEntity):
