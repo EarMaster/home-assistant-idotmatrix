@@ -80,22 +80,22 @@ Once configured, the integration creates several entities:
 - **Screen Flip**: Toggle screen rotation/flip
 
 ### Text Entities
-- **Message**: Send scrolling text messages to the display
-- **Display Image**: Send any image (PNG, JPEG, BMP, WebP, or animated GIF) by setting a local file path or http(s) URL. Static images are automatically sharpened before upload to improve legibility at small pixel counts.
-- **Icon & Message**: Display an icon in the top portion of the screen with a scrolling text message below. Format: `<icon_source>|<message>`. The icon source can be:
+- **Text: Message**: Send scrolling text messages to the display
+- **Image: File**: Send any image (PNG, JPEG, BMP, WebP, or animated GIF) by setting a local file path or http(s) URL. Static images are automatically sharpened before upload to improve legibility at small pixel counts.
+- **Image: Icon & Message**: Display an icon in the top portion of the screen with a scrolling text message below. Format: `<icon_source>|<message>`. The icon source can be:
   - An MDI icon name: `mdi:home`, `mdi:thermometer`, `mdi:weather-sunny` — the MDI webfont is downloaded and cached automatically on first use
   - A local file path: `/config/www/icons/home.png`
   - An http(s) URL
 
 ### Select Entities
 - **Display Mode**: Shows which content is currently active (`clock`, `text`, `effect`, `image`, `chronograph`) and lets you switch between modes. Selecting a mode re-activates the last content sent for that type (e.g. selecting `clock` re-sends the current clock style; selecting `text` re-sends the last scrolling message). The value updates automatically whenever any other entity changes what is shown on the display.
-- **Clock Style**: Choose between different clock display styles
-- **Effect Mode**: Select visual effects
+- **Clock: Style**: Choose between different clock display styles
+- **Effect: Mode**: Select visual effects
 
 ### Button Entities
 - **Reset Device**: Reset the device to default settings
 - **Freeze Screen**: Freeze the current display
-- **Start/Stop/Reset Chronograph**: Control stopwatch functionality
+- **Chronograph: Start / Chronograph: Stop / Chronograph: Reset**: Control stopwatch functionality
 - **Sync Time**: Synchronize device time with Home Assistant
 
 ## Automations
