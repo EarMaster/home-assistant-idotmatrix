@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2026-06-02
+
+### Fixed
+- MDI icon CSS parser now handles both `::before` (CSS3) and `:before` (minified/older) pseudo-element formats, preventing icons from silently failing to load when the cached stylesheet uses the older form
+- MDI icon render size increased to match the full screen width (was 55%×55% of screen size, producing a 17×17 px glyph on a 32-px display that could appear nearly invisible)
+
 ## [1.7.0] - 2026-06-01
 
 ### Added
