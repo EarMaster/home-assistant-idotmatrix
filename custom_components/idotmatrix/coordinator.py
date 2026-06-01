@@ -151,6 +151,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         cm.client = client
         cm._connected = True
         self._connected = True
+        self._state["is_on"] = True
         _LOGGER.info("Device %s connected", self.mac_address)
         self.hass.async_create_task(self.async_request_refresh())
         self.hass.async_create_task(self.async_sync_time())
