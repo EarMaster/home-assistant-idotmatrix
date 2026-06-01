@@ -25,6 +25,10 @@ async def async_setup_entry(
         IDotMatrixChronographStopButton(coordinator),
         IDotMatrixChronographResetButton(coordinator),
         IDotMatrixSyncTimeButton(coordinator),
+        IDotMatrixCountdownStartButton(coordinator),
+        IDotMatrixCountdownPauseButton(coordinator),
+        IDotMatrixCountdownStopButton(coordinator),
+        IDotMatrixCountdownRestartButton(coordinator),
     ])
 
 
@@ -112,3 +116,55 @@ class IDotMatrixSyncTimeButton(IDotMatrixEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Handle the button press."""
         await self.coordinator.async_sync_time()
+
+
+class IDotMatrixCountdownStartButton(IDotMatrixEntity, ButtonEntity):
+    """Start the countdown from the configured minutes/seconds."""
+
+    def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "countdown_start")
+        self._attr_name = "Countdown: Start"
+        self._attr_icon = "mdi:timer-play"
+
+    async def async_press(self) -> None:
+        mins = self.coordinator.data.get("countdown_minutes", 0)
+        secs = self.coordinator.data.get("countdown_seconds", 0)
+        await self.coordinator.async_start_countdown(mins, secs)
+        await self.coordinator.async_request_refresh()
+
+
+class IDotMatrixCountdownPauseButton(IDotMatrixEntity, ButtonEntity):
+    """Pause the running countdown."""
+
+    def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "countdown_pause")
+        self._attr_name = "Countdown: Pause"
+        self._attr_icon = "mdi:timer-pause"
+
+    async def async_press(self) -> None:
+        await self.coordinator.async_pause_countdown()
+
+
+class IDotMatrixCountdownStopButton(IDotMatrixEntity, ButtonEntity):
+    """Stop the countdown."""
+
+    def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "countdown_stop")
+        self._attr_name = "Countdown: Stop"
+        self._attr_icon = "mdi:timer-stop"
+
+    async def async_press(self) -> None:
+        await self.coordinator.async_stop_countdown()
+
+
+class IDotMatrixCountdownRestartButton(IDotMatrixEntity, ButtonEntity):
+    """Restart the countdown from its original duration."""
+
+    def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "countdown_restart")
+        self._attr_name = "Countdown: Restart"
+        self._attr_icon = "mdi:timer-refresh"
+
+    async def async_press(self) -> None:
+        await self.coordinator.async_restart_countdown()
+        await self.coordinator.async_request_refresh()

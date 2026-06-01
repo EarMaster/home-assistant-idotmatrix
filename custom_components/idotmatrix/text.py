@@ -27,6 +27,7 @@ async def async_setup_entry(
         IDotMatrixText(coordinator),
         IDotMatrixImageDisplay(coordinator),
         IDotMatrixIconMessage(coordinator),
+        IDotMatrixCountdownTimer(coordinator),
     ])
 
 
@@ -127,4 +128,35 @@ class IDotMatrixIconMessage(IDotMatrixEntity, TextEntity):
         if not icon_source or not message:
             return
         await self.coordinator.async_display_icon_message(icon_source, message)
+        await self.coordinator.async_request_refresh()
+
+
+class IDotMatrixCountdownTimer(IDotMatrixEntity, TextEntity):
+    """Optional link to a Home Assistant Timer entity for automatic countdown sync.
+
+    Set to a ``timer.*`` entity ID (e.g. ``timer.kitchen``) to have the iDotMatrix
+    countdown mirror that timer automatically: starting, pausing, restarting, and
+    stopping in sync with the HA timer.  Clear the field to disable the link.
+    """
+
+    def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "countdown_timer")
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_name = "Countdown: Timer Entity"
+        self._attr_icon = "mdi:timer-sync"
+        self._attr_max = 255
+        self._attr_min = 0
+
+    @property
+    def native_value(self) -> str:
+        return self.coordinator.data.get("countdown_timer_entity", "")
+
+    async def async_set_value(self, value: str) -> None:
+        entity_id = value.strip()
+        if entity_id and not entity_id.startswith("timer."):
+            _LOGGER.warning(
+                "Countdown timer entity must be a timer.* entity ID, got: %r", entity_id
+            )
+            return
+        await self.coordinator.async_set_countdown_timer(entity_id)
         await self.coordinator.async_request_refresh()

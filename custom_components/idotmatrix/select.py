@@ -36,7 +36,7 @@ class IDotMatrixDisplayModeSelect(IDotMatrixEntity, SelectEntity):
     entity (Message, Clock Style, Effect Mode, …) changes the content.
     """
 
-    _MODES = ["clock", "text", "effect", "image", "chronograph"]
+    _MODES = ["clock", "text", "effect", "image", "chronograph", "scoreboard", "countdown"]
 
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
         super().__init__(coordinator, "current_mode")
@@ -71,6 +71,14 @@ class IDotMatrixDisplayModeSelect(IDotMatrixEntity, SelectEntity):
                 )
         elif option == "chronograph":
             await self.coordinator.async_start_chronograph()
+        elif option == "scoreboard":
+            home = self.coordinator.data.get("scoreboard_home", 0)
+            away = self.coordinator.data.get("scoreboard_away", 0)
+            await self.coordinator.async_display_scoreboard(home, away)
+        elif option == "countdown":
+            mins = self.coordinator.data.get("countdown_minutes", 0)
+            secs = self.coordinator.data.get("countdown_seconds", 0)
+            await self.coordinator.async_start_countdown(mins, secs)
         await self.coordinator.async_request_refresh()
 
 

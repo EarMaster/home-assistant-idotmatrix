@@ -12,7 +12,8 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 import homeassistant.util.dt as dt_util
 
@@ -34,6 +35,39 @@ _DEFAULT_EFFECT_MODE = next(iter(EFFECT_TYPES))
 _CLOCK_STYLE_BY_ID = {v: k for k, v in CLOCK_STYLES.items()}
 _EFFECT_MODE_BY_ID = {v: k for k, v in EFFECT_TYPES.items()}
 
+
+def _parse_timer_remaining(timer_state) -> tuple[int, int] | None:
+    """Return (minutes, seconds) clamped to 0–59 from an active or paused HA Timer state."""
+    attrs = timer_state.attributes
+    remaining: float = 0.0
+
+    if timer_state.state == "active":
+        finishes_at = attrs.get("finishes_at")
+        if not finishes_at:
+            return None
+        finish_dt = dt_util.parse_datetime(finishes_at)
+        if finish_dt is None:
+            return None
+        remaining = (finish_dt - dt_util.utcnow()).total_seconds()
+    elif timer_state.state == "paused":
+        remaining_str = attrs.get("remaining") or attrs.get("duration", "0:00:00")
+        try:
+            parts = remaining_str.split(":")
+            if len(parts) == 3:
+                remaining = int(parts[0]) * 3600 + int(parts[1]) * 60 + int(float(parts[2]))
+            elif len(parts) == 2:
+                remaining = int(parts[0]) * 60 + int(float(parts[1]))
+            else:
+                return None
+        except (ValueError, AttributeError):
+            return None
+    else:
+        return None
+
+    total = max(0, min(3599, int(remaining)))  # clamp to 00:00–59:59
+    return total // 60, total % 60
+
+
 _MDI_FONT_URL = "https://cdn.jsdelivr.net/npm/@mdi/font@latest/fonts/materialdesignicons-webfont.ttf"
 _MDI_CSS_URL = "https://cdn.jsdelivr.net/npm/@mdi/font@latest/css/materialdesignicons.css"
 # The library's font file is not included in its pip package (fonts/ dir is at repo root,
@@ -54,6 +88,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
         self._command_lock = asyncio.Lock()
         self._connected = False
+        self._countdown_timer_unsub = None
 
         self._state: dict[str, Any] = {
             "is_on": False,
@@ -65,6 +100,11 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             "last_message": "",
             "last_image": "",
             "last_icon_message": "",
+            "scoreboard_home": 0,
+            "scoreboard_away": 0,
+            "countdown_minutes": 0,
+            "countdown_seconds": 0,
+            "countdown_timer_entity": "",
         }
 
         from idotmatrix.client import IDotMatrixClient
@@ -447,13 +487,13 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
         tmp_path = await self.hass.async_add_executor_job(_write_temp, image_data)
         try:
+            ok = await self._async_send_command(self._client.image.set_mode)
+            if not ok:
+                return False
             if is_gif:
                 return await self._async_send_command(
                     self._client.gif.upload_gif_file, tmp_path
                 )
-            ok = await self._async_send_command(self._client.image.set_mode)
-            if not ok:
-                return False
             return await self._async_send_command(
                 self._client.image.upload_image_file, tmp_path
             )
@@ -560,6 +600,109 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         )
         return out.getvalue()
 
+    # Scoreboard
+
+    async def async_display_scoreboard(self, home: int, away: int) -> bool:
+        """Display a scoreboard with two scores (0–999 each)."""
+        success = await self._async_send_command(
+            self._client.scoreboard.show, home, away
+        )
+        if success:
+            self._state["current_mode"] = "scoreboard"
+            self._state["scoreboard_home"] = home
+            self._state["scoreboard_away"] = away
+            self._fire_event("scoreboard_displayed", {"home": home, "away": away})
+        return success
+
+    # Countdown
+
+    async def async_start_countdown(self, minutes: int, seconds: int) -> bool:
+        """Start the countdown from the given duration (0–59 min, 0–59 sec)."""
+        success = await self._async_send_command(
+            self._client.countdown.start, minutes, seconds
+        )
+        if success:
+            self._state["current_mode"] = "countdown"
+            self._state["countdown_minutes"] = minutes
+            self._state["countdown_seconds"] = seconds
+            self._fire_event("countdown_started", {"minutes": minutes, "seconds": seconds})
+        return success
+
+    async def async_pause_countdown(self) -> bool:
+        """Pause the running countdown."""
+        success = await self._async_send_command(self._client.countdown.pause)
+        if success:
+            self._fire_event("countdown_paused")
+        return success
+
+    async def async_stop_countdown(self) -> bool:
+        """Stop (disable) the countdown."""
+        success = await self._async_send_command(self._client.countdown.stop)
+        if success:
+            self._fire_event("countdown_stopped")
+        return success
+
+    async def async_restart_countdown(self) -> bool:
+        """Restart the countdown from its original duration."""
+        success = await self._async_send_command(self._client.countdown.restart)
+        if success:
+            self._state["current_mode"] = "countdown"
+            self._fire_event("countdown_restarted")
+        return success
+
+    async def async_set_countdown_timer(self, entity_id: str) -> None:
+        """Link to a HA Timer entity; pass empty string to unlink."""
+        if self._countdown_timer_unsub is not None:
+            self._countdown_timer_unsub()
+            self._countdown_timer_unsub = None
+
+        self._state["countdown_timer_entity"] = entity_id
+
+        if not entity_id:
+            return
+
+        @callback
+        def _on_timer_state_change(event) -> None:
+            new_state = event.data.get("new_state")
+            old_state = event.data.get("old_state")
+            if new_state is None:
+                return
+            old_s = old_state.state if old_state else None
+            new_s = new_state.state
+
+            if new_s == "active" and old_s == "paused":
+                self.hass.async_create_task(self.async_restart_countdown())
+            elif new_s == "active":
+                result = _parse_timer_remaining(new_state)
+                if result:
+                    self.hass.async_create_task(
+                        self.async_start_countdown(*result)
+                    )
+            elif new_s == "paused":
+                self.hass.async_create_task(self.async_pause_countdown())
+            elif new_s == "idle":
+                self.hass.async_create_task(self.async_stop_countdown())
+            self.hass.async_create_task(self.async_request_refresh())
+
+        self._countdown_timer_unsub = async_track_state_change_event(
+            self.hass, entity_id, _on_timer_state_change
+        )
+
+        # Sync with the timer's current state immediately
+        timer_state = self.hass.states.get(entity_id)
+        if timer_state is None:
+            _LOGGER.warning("Countdown timer entity %r not found", entity_id)
+            return
+        if timer_state.state == "active":
+            result = _parse_timer_remaining(timer_state)
+            if result:
+                await self.async_start_countdown(*result)
+        elif timer_state.state == "paused":
+            result = _parse_timer_remaining(timer_state)
+            if result:
+                self._state["countdown_minutes"] = result[0]
+                self._state["countdown_seconds"] = result[1]
+
     # Chronograph
 
     async def async_start_chronograph(self) -> bool:
@@ -616,6 +759,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_shutdown(self) -> None:
         """Disconnect the BLE client cleanly on HA shutdown."""
+        if self._countdown_timer_unsub is not None:
+            self._countdown_timer_unsub()
+            self._countdown_timer_unsub = None
         _LOGGER.info("Shutting down iDotMatrix coordinator for %s", self.mac_address)
         cm = self._client._connection_manager
         if cm.client is not None and cm.client.is_connected:
