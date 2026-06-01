@@ -7,7 +7,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CLOCK_STYLES, DOMAIN, EFFECT_TYPES
+from .const import CLOCK_STYLES, COLOR_PRESETS, DOMAIN, EFFECT_TYPES
 from .coordinator import IDotMatrixDataUpdateCoordinator
 from .entity import IDotMatrixEntity
 
@@ -22,6 +22,7 @@ async def async_setup_entry(
     async_add_entities([
         IDotMatrixDisplayModeSelect(coordinator),
         IDotMatrixClockStyleSelect(coordinator),
+        IDotMatrixClockColorSelect(coordinator),
         IDotMatrixEffectSelect(coordinator),
     ])
 
@@ -102,6 +103,25 @@ class IDotMatrixClockStyleSelect(IDotMatrixEntity, SelectEntity):
         """Select an option."""
         style_id = CLOCK_STYLES[option]
         await self.coordinator.async_set_clock_mode(style_id)
+        await self.coordinator.async_request_refresh()
+
+
+class IDotMatrixClockColorSelect(IDotMatrixEntity, SelectEntity):
+    """Color selector for the clock display."""
+
+    def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "clock_color")
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_name = "Clock: Color"
+        self._attr_icon = "mdi:palette"
+        self._attr_options = list(COLOR_PRESETS.keys())
+
+    @property
+    def current_option(self) -> str | None:
+        return self.coordinator.data.get("clock_color", "white")
+
+    async def async_select_option(self, option: str) -> None:
+        await self.coordinator.async_set_clock_color(option)
         await self.coordinator.async_request_refresh()
 
 

@@ -14,11 +14,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 import homeassistant.util.dt as dt_util
 
 from .const import (
     CLOCK_STYLES,
+    COLOR_PRESETS,
     CONF_MAC_ADDRESS,
     CONF_SCREEN_SIZE,
     DEFAULT_SCAN_INTERVAL,
@@ -34,6 +36,17 @@ _DEFAULT_CLOCK_STYLE = next(iter(CLOCK_STYLES))
 _DEFAULT_EFFECT_MODE = next(iter(EFFECT_TYPES))
 _CLOCK_STYLE_BY_ID = {v: k for k, v in CLOCK_STYLES.items()}
 _EFFECT_MODE_BY_ID = {v: k for k, v in EFFECT_TYPES.items()}
+
+# State keys persisted to .storage/ so they survive HA restarts.
+_PERSIST_KEYS = frozenset({
+    "current_mode",
+    "brightness", "screen_flipped",
+    "clock_style", "clock_show_date", "clock_hour24", "clock_color",
+    "effect_mode",
+    "last_message", "last_image", "last_icon_message",
+    "scoreboard_home", "scoreboard_away",
+    "countdown_minutes", "countdown_seconds", "countdown_timer_entity",
+})
 
 
 def _parse_timer_remaining(timer_state) -> tuple[int, int] | None:
@@ -89,6 +102,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self._command_lock = asyncio.Lock()
         self._connected = False
         self._countdown_timer_unsub = None
+        self._state_dirty = False
+        self._store: Store = Store(hass, 1, f"{DOMAIN}.{self.mac_address}")
 
         self._state: dict[str, Any] = {
             "is_on": False,
@@ -96,6 +111,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             "screen_flipped": False,
             "current_mode": "clock",
             "clock_style": _DEFAULT_CLOCK_STYLE,
+            "clock_show_date": True,
+            "clock_hour24": True,
+            "clock_color": "white",
             "effect_mode": _DEFAULT_EFFECT_MODE,
             "last_message": "",
             "last_image": "",
@@ -135,7 +153,19 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self.hass.bus.async_fire(f"{DOMAIN}_{event_type}", event_data)
 
     async def async_setup_client(self) -> None:
-        """Attempt initial BLE connection; poll will retry if device is not yet in range."""
+        """Load persisted state then attempt initial BLE connection."""
+        stored = await self._store.async_load()
+        if stored:
+            for key, value in stored.items():
+                if key in _PERSIST_KEYS:
+                    self._state[key] = value
+            saved_timer = stored.get("countdown_timer_entity", "")
+            if saved_timer:
+                # Re-subscribe without triggering an immediate BLE command —
+                # the device may not be connected yet at this point.
+                self.hass.async_create_task(
+                    self.async_set_countdown_timer(saved_timer, sync_now=False)
+                )
         try:
             await self._ble_connect()
         except Exception as ex:
@@ -216,6 +246,11 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 await self._ble_connect()
             except Exception as ex:
                 _LOGGER.debug("Reconnect attempt failed for %s: %s", self.mac_address, ex)
+        if self._state_dirty:
+            self._state_dirty = False
+            await self._store.async_save(
+                {k: self._state[k] for k in _PERSIST_KEYS if k in self._state}
+            )
         return self._state.copy()
 
     async def _async_send_command(self, command_func, *args, **kwargs) -> bool:
@@ -235,6 +270,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         async with self._command_lock:
             try:
                 await command_func(*args, **kwargs)
+                self._state_dirty = True
                 return True
             except Exception as ex:
                 _LOGGER.warning("Command failed for %s: %s", self.mac_address, ex)
@@ -314,13 +350,42 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
     # Clock
 
     async def async_set_clock_mode(self, style: int) -> bool:
-        """Set clock display style."""
-        success = await self._async_send_command(self._client.clock.show, style)
+        """Set clock display style, passing the stored show_date/hour24/color settings."""
+        show_date = self._state.get("clock_show_date", True)
+        hour24 = self._state.get("clock_hour24", True)
+        color = COLOR_PRESETS.get(self._state.get("clock_color", "white"), (255, 255, 255))
+        success = await self._async_send_command(
+            self._client.clock.show, style,
+            show_date=show_date,
+            hour24=hour24,
+            color=color,
+        )
         if success:
             self._state["current_mode"] = "clock"
             self._state["clock_style"] = _CLOCK_STYLE_BY_ID.get(style, _DEFAULT_CLOCK_STYLE)
             self._fire_event("clock_mode_set", {"style": style})
         return success
+
+    async def async_set_clock_show_date(self, show_date: bool) -> bool:
+        """Toggle date display on the clock and re-send."""
+        self._state["clock_show_date"] = show_date
+        return await self.async_set_clock_mode(
+            CLOCK_STYLES[self._state.get("clock_style", _DEFAULT_CLOCK_STYLE)]
+        )
+
+    async def async_set_clock_hour24(self, hour24: bool) -> bool:
+        """Toggle 24-hour format on the clock and re-send."""
+        self._state["clock_hour24"] = hour24
+        return await self.async_set_clock_mode(
+            CLOCK_STYLES[self._state.get("clock_style", _DEFAULT_CLOCK_STYLE)]
+        )
+
+    async def async_set_clock_color(self, color_name: str) -> bool:
+        """Change the clock color and re-send."""
+        self._state["clock_color"] = color_name
+        return await self.async_set_clock_mode(
+            CLOCK_STYLES[self._state.get("clock_style", _DEFAULT_CLOCK_STYLE)]
+        )
 
     async def async_sync_time(self) -> bool:
         """Synchronize device time with Home Assistant."""
@@ -650,13 +715,18 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             self._fire_event("countdown_restarted")
         return success
 
-    async def async_set_countdown_timer(self, entity_id: str) -> None:
-        """Link to a HA Timer entity; pass empty string to unlink."""
+    async def async_set_countdown_timer(self, entity_id: str, *, sync_now: bool = True) -> None:
+        """Link to a HA Timer entity; pass empty string to unlink.
+
+        sync_now=False skips the immediate BLE command on load so the device
+        is not contacted before the BLE connection is established.
+        """
         if self._countdown_timer_unsub is not None:
             self._countdown_timer_unsub()
             self._countdown_timer_unsub = None
 
         self._state["countdown_timer_entity"] = entity_id
+        self._state_dirty = True
 
         if not entity_id:
             return
@@ -687,6 +757,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self._countdown_timer_unsub = async_track_state_change_event(
             self.hass, entity_id, _on_timer_state_change
         )
+
+        if not sync_now:
+            return
 
         # Sync with the timer's current state immediately
         timer_state = self.hass.states.get(entity_id)
