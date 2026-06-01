@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-06-01
+
+### Added
+- **Scoreboard**: new display mode with `Scoreboard: Home` and `Scoreboard: Away` number inputs (0–999 each); setting either score sends both values to the display immediately and switches to scoreboard mode
+- **Countdown**: new display mode with `Countdown: Minutes` and `Countdown: Seconds` inputs (0–59), `Countdown: Start / Pause / Stop / Restart` buttons, and optional automatic sync with a Home Assistant Timer entity via the `Countdown: Timer Entity` text field
+
+### Fixed
+- **Image: Icon & Message** and animated GIFs now display correctly when the previous mode was clock or any other non-image mode; `image.set_mode` is now called before every image and GIF upload so the device switches out of its current mode first
+
 ## [1.5.1] - 2026-06-01
 
 ### Fixed
