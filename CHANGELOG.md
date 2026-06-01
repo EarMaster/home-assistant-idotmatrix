@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-06-01
+
+### Added
+- **Clock: 24-Hour Format** switch — toggle between 24-hour and 12-hour time display
+- **Clock: Show Date** switch — toggle date display alongside the clock
+- **Clock: Color** select — choose from 10 preset colors (White, Red, Green, Blue, Yellow, Cyan, Magenta, Orange, Pink, Rainbow)
+
+### Fixed
+- Clock style, effect mode, display mode, brightness, and all other coordinator settings now persist across Home Assistant restarts; state is saved to `.storage/` after every command and restored on startup, so selections survive reboots
+
 ## [1.6.0] - 2026-06-01
 
 ### Added
