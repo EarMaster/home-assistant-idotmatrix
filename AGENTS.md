@@ -27,7 +27,7 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 
 `coordinator.py` — `IDotMatrixDataUpdateCoordinator` is the single source of truth. All platforms read state from it and write through its methods.
 
-- **State dict** (`self._state`): `is_on`, `brightness` (0–255), `screen_flipped`, `current_mode` (`clock`/`text`/`effect`/`image`/`chronograph`), `clock_style`, `effect_mode`, `last_message`, `last_image`, `last_icon_message`. Platforms read this via `self.coordinator.data`.
+- **State dict** (`self._state`): `is_on`, `brightness` (0–255), `screen_flipped`, `current_mode` (`clock`/`text`/`effect`/`image`/`chronograph`/`scoreboard`), `clock_style`, `effect_mode`, `last_message`, `last_image`, `last_icon_message`, `scoreboard_home` (0–999), `scoreboard_away` (0–999). Platforms read this via `self.coordinator.data`.
 - **BLE client**: `IDotMatrixClient(screen_size=ScreenSize[...], mac_address=...)` — persistent connection managed via `bleak-retry-connector`. On successful connect, `is_on` is set to `True` (the device has no readable on/off characteristic; connected = on).
 - **Availability**: `_connected` flag toggled by `_ble_connect()` and the Bleak disconnected callback. Each state change schedules `async_request_refresh()` so entities update immediately. `_async_update_data` returns cached `_state` and retries `_ble_connect()` when not connected.
 - **Command serialisation**: `_async_send_command` acquires an `asyncio.Lock` and `await`s the library call. No connect/disconnect per command — the persistent connection is reused.
@@ -51,6 +51,7 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 | `button` | `async_reset_chronograph()` | `_client.chronograph.reset` |
 | `button` | `async_freeze_screen()` | `_client.common.freeze_screen` |
 | `button` | `async_reset_device()` | `_client.common.reset` |
+| `number` | `async_display_scoreboard(home, away)` | `_client.scoreboard.show(home, away)` |
 
 Brightness conversion: HA uses 0–255, device uses 5–100%. Coordinator converts with `max(5, int(brightness / 255 * 100))`.
 
@@ -58,7 +59,7 @@ Brightness conversion: HA uses 0–255, device uses 5–100%. Coordinator conver
 
 **Controls** (no `entity_category`): Display (light), Display Mode (select), Chronograph: Reset/Start/Stop (buttons), Freeze Screen, Reset Device, Sync Time.
 
-**Configuration** (`EntityCategory.CONFIG`): Clock: Style, Effect: Mode, Image: File, Image: Icon & Message, Screen Flip, Text: Message.
+**Configuration** (`EntityCategory.CONFIG`): Clock: Style, Effect: Mode, Image: File, Image: Icon & Message, Screen Flip, Text: Message, Scoreboard: Home, Scoreboard: Away.
 
 ### Base entity
 
@@ -112,6 +113,7 @@ custom_components/idotmatrix/
   text.py              Text: Message, Image: File, Image: Icon & Message (Configuration section)
   select.py            Display Mode (Controls); Clock: Style, Effect: Mode (Configuration section)
   button.py            Chronograph: Start/Stop/Reset (Controls); Freeze Screen, Reset Device, Sync Time (Controls)
+  number.py            Scoreboard: Home, Scoreboard: Away (Configuration section)
   services.yaml        service UI descriptions (no handlers registered — informational only)
   strings.json         config flow string keys
   translations/en.json English strings for config/options UI

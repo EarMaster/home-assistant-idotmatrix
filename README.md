@@ -15,6 +15,8 @@ A custom Home Assistant integration for iDotMatrix LED displays that provides de
 - **Stable Connection**: Persistent Bluetooth connection with automatic reconnect — commands work reliably without manual intervention
 - **Screen Controls**: Flip/rotate screen orientation
 - **Chronograph**: Start, stop, and reset stopwatch functionality
+- **Scoreboard**: Display two scores (0–999 each) for home and away teams
+- **Countdown**: Display a countdown timer with start, pause, stop, and restart controls; optionally syncs automatically with a Home Assistant Timer entity
 - **Time Synchronization**: Sync device time with Home Assistant
 
 ## Installation
@@ -86,16 +88,27 @@ Once configured, the integration creates several entities:
   - An MDI icon name: `mdi:home`, `mdi:thermometer`, `mdi:weather-sunny` — the MDI webfont is downloaded and cached automatically on first use
   - A local file path: `/config/www/icons/home.png`
   - An http(s) URL
+- **Countdown: Timer Entity**: Optional — enter a `timer.*` entity ID (e.g. `timer.kitchen`) to sync the iDotMatrix countdown automatically with that HA Timer. When the timer starts, pauses, resumes, or finishes, the display follows. Clear the field to disable the link.
 
 ### Select Entities
-- **Display Mode**: Shows which content is currently active (`clock`, `text`, `effect`, `image`, `chronograph`) and lets you switch between modes. Selecting a mode re-activates the last content sent for that type (e.g. selecting `clock` re-sends the current clock style; selecting `text` re-sends the last scrolling message). The value updates automatically whenever any other entity changes what is shown on the display.
+- **Display Mode**: Shows which content is currently active (`clock`, `text`, `effect`, `image`, `chronograph`, `scoreboard`, `countdown`) and lets you switch between modes. Selecting a mode re-activates the last content sent for that type (e.g. selecting `clock` re-sends the current clock style; selecting `text` re-sends the last scrolling message). The value updates automatically whenever any other entity changes what is shown on the display.
 - **Clock: Style**: Choose between different clock display styles
 - **Effect: Mode**: Select visual effects
+
+### Number Entities
+- **Scoreboard: Home**: Home team score (0–999). Setting the value immediately sends both scores to the display.
+- **Scoreboard: Away**: Away team score (0–999). Setting the value immediately sends both scores to the display.
+- **Countdown: Minutes**: Minutes component of the countdown duration (0–59). Setting the value starts the countdown immediately.
+- **Countdown: Seconds**: Seconds component of the countdown duration (0–59). Setting the value starts the countdown immediately.
 
 ### Button Entities
 - **Reset Device**: Reset the device to default settings
 - **Freeze Screen**: Freeze the current display
 - **Chronograph: Start / Chronograph: Stop / Chronograph: Reset**: Control stopwatch functionality
+- **Countdown: Start**: Start the countdown from the configured Minutes/Seconds values
+- **Countdown: Pause**: Pause the running countdown
+- **Countdown: Stop**: Stop (disable) the countdown
+- **Countdown: Restart**: Restart the countdown from its original duration
 - **Sync Time**: Synchronize device time with Home Assistant
 
 ## Automations
