@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -79,7 +80,8 @@ class IDotMatrixClockStyleSelect(IDotMatrixEntity, SelectEntity):
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
         """Initialize the select entity."""
         super().__init__(coordinator, "clock_style")
-        self._attr_name = "Clock Style"
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_name = "Clock: Style"
         self._attr_icon = "mdi:clock"
         self._attr_options = list(CLOCK_STYLES.keys())
 
@@ -101,7 +103,8 @@ class IDotMatrixEffectSelect(IDotMatrixEntity, SelectEntity):
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
         """Initialize the select entity."""
         super().__init__(coordinator, "effect_mode")
-        self._attr_name = "Effect Mode"
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_name = "Effect: Mode"
         self._attr_icon = "mdi:palette"
         self._attr_options = list(EFFECT_TYPES.keys())
 

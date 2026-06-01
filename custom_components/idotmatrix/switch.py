@@ -5,6 +5,7 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -29,6 +30,7 @@ class IDotMatrixScreenFlipSwitch(IDotMatrixEntity, SwitchEntity):
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
         """Initialize the switch."""
         super().__init__(coordinator, "screen_flip")
+        self._attr_entity_category = EntityCategory.CONFIG
         self._attr_name = "Screen Flip"
         self._attr_icon = "mdi:screen-rotation"
 

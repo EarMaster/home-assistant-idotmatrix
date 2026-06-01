@@ -5,6 +5,7 @@ import logging
 
 from homeassistant.components.text import TextEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -35,7 +36,8 @@ class IDotMatrixText(IDotMatrixEntity, TextEntity):
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
         """Initialize the text entity."""
         super().__init__(coordinator, "message")
-        self._attr_name = "Message"
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_name = "Text: Message"
         self._attr_icon = "mdi:message-text"
         self._attr_max = 1000
         self._attr_min = 0
@@ -62,7 +64,8 @@ class IDotMatrixImageDisplay(IDotMatrixEntity, TextEntity):
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
         """Initialize the image display entity."""
         super().__init__(coordinator, "image_display")
-        self._attr_name = "Display Image"
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_name = "Image: File"
         self._attr_icon = "mdi:image"
         self._attr_max = 2048
         self._attr_min = 0
@@ -100,7 +103,8 @@ class IDotMatrixIconMessage(IDotMatrixEntity, TextEntity):
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
         """Initialize the icon+message entity."""
         super().__init__(coordinator, "icon_message")
-        self._attr_name = "Icon & Message"
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_name = "Image: Icon & Message"
         self._attr_icon = "mdi:image-text"
         self._attr_max = 2048
         self._attr_min = 0

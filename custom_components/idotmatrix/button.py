@@ -63,7 +63,7 @@ class IDotMatrixChronographStartButton(IDotMatrixEntity, ButtonEntity):
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
         """Initialize the button."""
         super().__init__(coordinator, "chronograph_start")
-        self._attr_name = "Start Chronograph"
+        self._attr_name = "Chronograph: Start"
         self._attr_icon = "mdi:play"
 
     async def async_press(self) -> None:
@@ -78,7 +78,7 @@ class IDotMatrixChronographStopButton(IDotMatrixEntity, ButtonEntity):
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
         """Initialize the button."""
         super().__init__(coordinator, "chronograph_stop")
-        self._attr_name = "Stop Chronograph"
+        self._attr_name = "Chronograph: Stop"
         self._attr_icon = "mdi:stop"
 
     async def async_press(self) -> None:
@@ -92,7 +92,7 @@ class IDotMatrixChronographResetButton(IDotMatrixEntity, ButtonEntity):
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
         """Initialize the button."""
         super().__init__(coordinator, "chronograph_reset")
-        self._attr_name = "Reset Chronograph"
+        self._attr_name = "Chronograph: Reset"
         self._attr_icon = "mdi:restart"
 
     async def async_press(self) -> None:
