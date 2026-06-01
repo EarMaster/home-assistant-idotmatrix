@@ -10,7 +10,7 @@ A custom Home Assistant integration for iDotMatrix LED displays that provides de
 - **Manual Device Entry**: Add devices by MAC address if auto-discovery fails
 - **Display Control**: Turn display on/off and adjust brightness
 - **Text Display**: Send custom text messages to the display
-- **Clock Modes**: Multiple clock styles (RGB Swipe Outline, Christmas Tree, Checkers, Color, Hourglass, Alarm Clock, Outlines, RGB Corners)
+- **Clock Modes**: Multiple clock styles (RGB Swipe Outline, Christmas Tree, Checkers, Color, Hourglass, Alarm Clock, Outlines, RGB Corners) with configurable 24h/12h format, date display, and color
 - **Visual Effects**: Various effects like Horizontal Rainbow, Random Colored Pixels, Vertical Rainbow, Diagonal Rainbow, and more
 - **Stable Connection**: Persistent Bluetooth connection with automatic reconnect — commands work reliably without manual intervention
 - **Screen Controls**: Flip/rotate screen orientation
@@ -78,8 +78,10 @@ Once configured, the integration creates several entities:
 - **Display**: Control display on/off state and brightness
 - Located in the Light domain
 
-### Switch Entity
+### Switch Entities
 - **Screen Flip**: Toggle screen rotation/flip
+- **Clock: 24-Hour Format**: Toggle between 24-hour and 12-hour time display
+- **Clock: Show Date**: Toggle whether the current date is shown alongside the time
 
 ### Text Entities
 - **Text: Message**: Send scrolling text messages to the display
@@ -93,6 +95,7 @@ Once configured, the integration creates several entities:
 ### Select Entities
 - **Display Mode**: Shows which content is currently active (`clock`, `text`, `effect`, `image`, `chronograph`, `scoreboard`, `countdown`) and lets you switch between modes. Selecting a mode re-activates the last content sent for that type (e.g. selecting `clock` re-sends the current clock style; selecting `text` re-sends the last scrolling message). The value updates automatically whenever any other entity changes what is shown on the display.
 - **Clock: Style**: Choose between different clock display styles
+- **Clock: Color**: Choose the clock's display color (White, Red, Green, Blue, Yellow, Cyan, Magenta, Orange, Pink, or Rainbow)
 - **Effect: Mode**: Select visual effects
 
 ### Number Entities
