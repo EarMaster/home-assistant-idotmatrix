@@ -475,7 +475,11 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         await _ensure(font_path, _MDI_FONT_URL)
         await _ensure(css_path, _MDI_CSS_URL)
 
-        render_size = int(self.screen_size_px * 0.55)
+        # Render at the full icon-strip height (55% of screen) so the glyph
+        # fills the available space.  Previously used 55% as both image size
+        # AND font size, producing a tiny 17×17 output for a 32×32 screen.
+        icon_height = max(8, int(self.screen_size_px * 0.55))
+        render_size = max(icon_height, self.screen_size_px)
         return await self.hass.async_add_executor_job(
             self._render_mdi_icon, icon_name, font_path, css_path, render_size
         )
@@ -489,25 +493,46 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         if not cls._mdi_codepoints:
             with open(css_path, "r", encoding="utf-8") as fh:
                 css = fh.read()
+            # Support both ::before (CSS3) and :before (older) pseudo-element formats.
             cls._mdi_codepoints = {
                 name: int(cp, 16)
                 for name, cp in re.findall(
-                    r'\.mdi-([\w-]+)::before\s*\{\s*content:\s*"\\([0-9A-Fa-f]+)"', css
+                    r'\.mdi-([\w-]+)::?before\s*\{[^}]*content:\s*"\\([0-9A-Fa-f]+)"', css
                 )
             }
+            import logging as _logging
+            _logging.getLogger(__name__).debug(
+                "MDI codepoints loaded: %d icons from CSS", len(cls._mdi_codepoints)
+            )
 
         codepoint = cls._mdi_codepoints.get(icon_name)
         if codepoint is None:
-            raise ValueError(f"Unknown MDI icon: mdi:{icon_name}")
+            raise ValueError(
+                f"Unknown MDI icon: mdi:{icon_name} "
+                f"(codepoints loaded: {len(cls._mdi_codepoints)})"
+            )
+
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
 
         font = ImageFont.truetype(font_path, size=max(size - 2, 8))
         img = Image.new("RGB", (size, size), (0, 0, 0))
         draw = ImageDraw.Draw(img)
         char = chr(codepoint)
         bbox = draw.textbbox((0, 0), char, font=font)
+        _log.debug(
+            "MDI icon %r: codepoint U+%05X, font size %d, img %dx%d, bbox %s",
+            icon_name, codepoint, max(size - 2, 8), size, size, bbox,
+        )
         x = (size - (bbox[2] - bbox[0])) // 2 - bbox[0]
         y = (size - (bbox[3] - bbox[1])) // 2 - bbox[1]
         draw.text((x, y), char, font=font, fill=(255, 255, 255))
+
+        pixels = list(img.getdata())
+        non_black = sum(1 for p in pixels if p != (0, 0, 0))
+        _log.debug(
+            "MDI icon %r rendered: %d/%d non-black pixels", icon_name, non_black, len(pixels)
+        )
 
         out = io.BytesIO()
         img.save(out, format="PNG")
@@ -653,6 +678,16 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             frame.paste(text_surf.crop((offset, 0, offset + screen_size, text_height)), (0, icon_height))
             frames.append(frame)
 
+        import logging as _logging
+        icon_pixels = list(icon_img.getdata())
+        icon_non_black = sum(1 for p in icon_pixels if p != (0, 0, 0))
+        _logging.getLogger(__name__).debug(
+            "icon+message GIF: screen=%d icon_height=%d text_height=%d "
+            "frames=%d duration=%dms icon_non_black=%d/%d msg_w=%d",
+            screen_size, icon_height, text_height,
+            num_frames, frame_ms, icon_non_black, len(icon_pixels), text_width,
+        )
+
         out = io.BytesIO()
         frames[0].save(
             out,
@@ -663,7 +698,11 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             loop=0,
             optimize=False,
         )
-        return out.getvalue()
+        gif_bytes = out.getvalue()
+        _logging.getLogger(__name__).debug(
+            "icon+message GIF size: %d bytes", len(gif_bytes)
+        )
+        return gif_bytes
 
     # Scoreboard
 
