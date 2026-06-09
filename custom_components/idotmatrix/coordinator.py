@@ -577,13 +577,17 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
         tmp_path = await self.hass.async_add_executor_job(_write_temp, image_data)
         try:
-            ok = await self._async_send_command(self._client.image.set_mode)
-            if not ok:
-                return False
             if is_gif:
+                # GIF upload uses its own command byte (1) which signals the device
+                # to enter animation mode directly. Calling image.set_mode(EnableDIY)
+                # first puts the device into static-image mode (command 0), which
+                # causes it to ignore the subsequent GIF packets — leaving a black screen.
                 return await self._async_send_command(
                     self._client.gif.upload_gif_file, tmp_path
                 )
+            ok = await self._async_send_command(self._client.image.set_mode)
+            if not ok:
+                return False
             return await self._async_send_command(
                 self._client.image.upload_image_file, tmp_path
             )
