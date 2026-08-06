@@ -246,7 +246,7 @@ automation:
 This integration uses the [idotmatrix-api-client](https://github.com/markusressel/idotmatrix-api-client) library for device communication.
 
 ### Dependencies
-- `idotmatrix>=0.1.0`
+- `idotmatrix-api-client>=0.1.0` (imported as `idotmatrix`)
 - Home Assistant 2023.1 or later
 
 ## Support
