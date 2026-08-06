@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.3] - 2026-08-07
+
+### Fixed
+- Integration setup no longer fails with `Requirements for idotmatrix not found`. The manifest declared the requirement as `idotmatrix @ git+...`, but the package's metadata name is `idotmatrix-api-client`; Home Assistant's switch from `pip` to `uv` turned that mismatch into a hard install error (`Package metadata name 'idotmatrix-api-client' does not match given name 'idotmatrix'`). The import name (`idotmatrix`) is unchanged
+
 ## [1.7.2] - 2026-06-09
 
 ### Fixed
