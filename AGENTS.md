@@ -31,6 +31,7 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 - **BLE client**: `IDotMatrixClient(screen_size=ScreenSize[...], mac_address=...)` — persistent connection managed via `bleak-retry-connector`. On successful connect, `is_on` is set to `True` (the device has no readable on/off characteristic; connected = on).
 - **Availability**: `_connected` flag toggled by `_ble_connect()` and the Bleak disconnected callback. Each state change schedules `async_request_refresh()` so entities update immediately. `_async_update_data` returns cached `_state` and retries `_ble_connect()` when not connected.
 - **Command serialisation**: `_async_send_command` acquires an `asyncio.Lock` and `await`s the library call. No connect/disconnect per command — the persistent connection is reused.
+- **GIF upload**: `_upload_gif_file` replaces the library's `upload_gif_file`, which sends all 4 KB blocks back to back with no flow control (all writes are forced to write-without-response). It reuses the library's `_load_gif_and_adapt_to_canvas` + `create_gif_data_packets`, sends one block at a time and waits for the device's `05 00 01 00 xx` ack notification on `fa03` (subscribed in `_ble_connect`; 3 s timeout, then continues). Without this, multi-block GIFs freeze on the first frame or are ignored, especially via an ESPHome BT proxy.
 - **Device events**: Methods fire `hass.bus.async_fire(f"{DOMAIN}_{event_type}", ...)` for device triggers (see `device_trigger.py`).
 
 ### Platform → coordinator method → library call
@@ -41,8 +42,8 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 | `light` | `async_set_brightness(0–255)` | `_client.common.set_brightness(5–100)` |
 | `switch` | `async_set_screen_flip(bool)` | `_client.common.set_screen_flipped` |
 | `text` | `async_display_text(msg, size, color, speed)` | `_client.text.show_text` |
-| `text` | `async_display_image(path_or_url)` | `_client.image.set_mode` + `upload_image_file` / `_client.gif.upload_gif_file` |
-| `text` | `async_display_icon_message(icon, msg)` | renders composite GIF locally → `_client.gif.upload_gif_file` |
+| `text` | `async_display_image(path_or_url)` | `_client.image.set_mode` + `upload_image_file` / `_upload_gif_file` (see below) |
+| `text` | `async_display_icon_message(icon, msg)` | renders composite GIF locally → `_upload_gif_file` |
 | `select` | `async_set_clock_mode(int)` | `_client.clock.show(style)` |
 | `select` | `async_display_effect(int)` | `_client.effect.show(style, rgb_list)` |
 | `button` | `async_sync_time()` | `_client.common.set_time(datetime)` |
