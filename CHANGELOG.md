@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.4] - 2026-10-06
+
+### Fixed
+- Multi-block GIF uploads (**Image: File** with larger GIFs, **Image: Icon & Message**) no longer freeze on the first frame or get ignored. GIFs are now sent one 4 KB block at a time, waiting for the device's acknowledgement before the next block, instead of all at once with no flow control
+- **Image: Icon & Message** no longer stretches the icon across the full width; it keeps its aspect ratio and is centred
+- **Image: Icon & Message** icons and text are drawn without anti-aliasing, so they're crisper on the matrix and the GIF is about 3× smaller
+
 ## [1.7.3] - 2026-08-07
 
 ### Fixed
