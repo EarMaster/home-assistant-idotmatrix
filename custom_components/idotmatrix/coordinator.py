@@ -87,6 +87,15 @@ _MDI_CSS_URL = "https://cdn.jsdelivr.net/npm/@mdi/font@latest/css/materialdesign
 # excluded from pyproject.toml).  We download and cache it on first use instead.
 _TEXT_FONT_URL = "https://raw.githubusercontent.com/markusressel/idotmatrix-api-client/main/fonts/Rain-DRM3.otf"
 
+# GIF upload protocol (see https://github.com/8none1/idotmatrix): the payload is sent
+# in 4 KB blocks and the device notifies on fa03 after each one — 05 00 01 00 01 for
+# "block received", 05 00 01 00 03 for "upload complete".
+_UUID_NOTIFY_DATA = "0000fa03-0000-1000-8000-00805f9b34fb"
+_UUID_WRITE_DATA = "0000fa02-0000-1000-8000-00805f9b34fb"
+_GIF_ACK_PREFIX = b"\x05\x00\x01\x00"
+_GIF_ACK_TIMEOUT_S = 3.0
+_GIF_PACKET_DELAY_S = 0.02
+
 
 class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
     """Manage data updates for an iDotMatrix device."""
@@ -100,6 +109,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self.device_name = entry.data[CONF_NAME]
 
         self._command_lock = asyncio.Lock()
+        self._notifications: asyncio.Queue[bytes] = asyncio.Queue()
         self._connected = False
         self._countdown_timer_unsub = None
         self._state_dirty = False
@@ -217,6 +227,14 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             return await _orig_write(*args, response=False, **kwargs)
         client.write_gatt_char = _write_no_response
 
+        # The device acknowledges each 4 KB GIF block with a notification on fa03.
+        # Without waiting for it, multi-block uploads overrun the device (it shows the
+        # first frame or nothing at all), especially through an ESPHome BT proxy.
+        try:
+            await client.start_notify(_UUID_NOTIFY_DATA, self._on_ble_notification)
+        except Exception as ex:
+            _LOGGER.debug("Could not subscribe to notifications on %s: %s", self.mac_address, ex)
+
         # Inject the connected client so the library's protocol modules can send data.
         cm.client = client
         cm._connected = True
@@ -225,6 +243,11 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         _LOGGER.info("Device %s connected", self.mac_address)
         self.hass.async_create_task(self.async_request_refresh())
         self.hass.async_create_task(self.async_sync_time())
+
+    def _on_ble_notification(self, _sender, data: bytearray) -> None:
+        """Forward device notifications to whoever is waiting for an upload ack."""
+        _LOGGER.debug("Notification from %s: %s", self.mac_address, bytes(data).hex())
+        self._notifications.put_nowait(bytes(data))
 
     def _on_ble_disconnected(self, client: "BleakClient") -> None:
         """Called by Bleak when the device disconnects."""
@@ -475,13 +498,11 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         await _ensure(font_path, _MDI_FONT_URL)
         await _ensure(css_path, _MDI_CSS_URL)
 
-        # Render at the full icon-strip height (55% of screen) so the glyph
-        # fills the available space.  Previously used 55% as both image size
-        # AND font size, producing a tiny 17×17 output for a 32×32 screen.
+        # Render at exactly the icon-strip height so the glyph is pixel-exact and
+        # needs no rescaling (rescaling a square render into the strip squished it).
         icon_height = max(8, int(self.screen_size_px * 0.55))
-        render_size = max(icon_height, self.screen_size_px)
         return await self.hass.async_add_executor_job(
-            self._render_mdi_icon, icon_name, font_path, css_path, render_size
+            self._render_mdi_icon, icon_name, font_path, css_path, icon_height
         )
 
     @classmethod
@@ -518,6 +539,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         font = ImageFont.truetype(font_path, size=max(size - 2, 8))
         img = Image.new("RGB", (size, size), (0, 0, 0))
         draw = ImageDraw.Draw(img)
+        # No anti-aliasing: grey edge pixels look muddy on an LED matrix and bloat the GIF.
+        draw.fontmode = "1"
         char = chr(codepoint)
         bbox = draw.textbbox((0, 0), char, font=font)
         _log.debug(
@@ -582,9 +605,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 # to enter animation mode directly. Calling image.set_mode(EnableDIY)
                 # first puts the device into static-image mode (command 0), which
                 # causes it to ignore the subsequent GIF packets — leaving a black screen.
-                return await self._async_send_command(
-                    self._client.gif.upload_gif_file, tmp_path
-                )
+                return await self._async_send_command(self._upload_gif_file, tmp_path)
             ok = await self._async_send_command(self._client.image.set_mode)
             if not ok:
                 return False
@@ -593,6 +614,51 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             )
         finally:
             await self.hass.async_add_executor_job(os.unlink, tmp_path)
+
+    async def _upload_gif_file(self, file_path: str) -> None:
+        """Upload a GIF block by block, waiting for the device's ack after each block.
+
+        Replaces the library's upload_gif_file(), which sends every block back to back
+        without flow control. Reuses the library's GIF normalisation and packet builder.
+        """
+        from idotmatrix.util.image_utils import ResizeMode
+
+        gif_module = self._client.gif
+        gif_data = await self.hass.async_add_executor_job(
+            gif_module._load_gif_and_adapt_to_canvas,
+            file_path, self.screen_size_px, ResizeMode.FIT, True, (0, 0, 0), None,
+        )
+        # gif_type 12 = no time signature, same as the library's upload_gif_file()
+        blocks = gif_module.create_gif_data_packets(gif_data, gif_type=12, time_sign=1)
+        client = self._client._connection_manager.client
+        _LOGGER.debug(
+            "Uploading GIF to %s: %d bytes in %d block(s)", self.mac_address, len(gif_data), len(blocks)
+        )
+
+        while not self._notifications.empty():
+            self._notifications.get_nowait()
+
+        for index, block in enumerate(blocks, start=1):
+            for packet in block:
+                await client.write_gatt_char(_UUID_WRITE_DATA, packet, response=False)
+                await asyncio.sleep(_GIF_PACKET_DELAY_S)
+            ack = await self._wait_for_gif_ack()
+            _LOGGER.debug(
+                "GIF block %d/%d sent, ack: %s", index, len(blocks), ack.hex() if ack else "timeout"
+            )
+
+    async def _wait_for_gif_ack(self) -> bytes | None:
+        """Wait for the device's block ack; return None on timeout (upload continues)."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _GIF_ACK_TIMEOUT_S
+        while (remaining := deadline - loop.time()) > 0:
+            try:
+                data = await asyncio.wait_for(self._notifications.get(), remaining)
+            except asyncio.TimeoutError:
+                return None
+            if data.startswith(_GIF_ACK_PREFIX):
+                return data
+        return None
 
     @staticmethod
     def _detect_gif(image_data: bytes) -> bool:
@@ -651,8 +717,12 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             icon_img = ImageOps.exif_transpose(icon_img)
         except Exception:
             pass
-        icon_img = icon_img.resize((screen_size, icon_height), Image.LANCZOS)
-        icon_img = icon_img.filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
+        # Fit into the icon strip keeping the aspect ratio, centred horizontally.
+        if icon_img.size != (icon_height, icon_height):
+            icon_img.thumbnail((screen_size, icon_height), Image.LANCZOS)
+            icon_img = icon_img.filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
+        icon_x = (screen_size - icon_img.width) // 2
+        icon_y = (icon_height - icon_img.height) // 2
 
         # Measure text using default bitmap font
         font = ImageFont.load_default()
@@ -665,7 +735,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         # Build wide text surface: leading blank + text + trailing blank
         surface_w = screen_size + text_width + screen_size
         text_surf = Image.new("RGB", (surface_w, text_height), bg_color)
-        ImageDraw.Draw(text_surf).text((screen_size, text_y), message, font=font, fill=text_color)
+        text_draw = ImageDraw.Draw(text_surf)
+        text_draw.fontmode = "1"
+        text_draw.text((screen_size, text_y), message, font=font, fill=text_color)
 
         # Calculate frame count to stay within device GIF limits (64 frames, 2000 ms total)
         total_scroll = screen_size + text_width
@@ -678,7 +750,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         for i in range(num_frames):
             offset = i * px_per_frame
             frame = Image.new("RGB", (screen_size, screen_size), bg_color)
-            frame.paste(icon_img, (0, 0))
+            frame.paste(icon_img, (icon_x, icon_y))
             frame.paste(text_surf.crop((offset, 0, offset + screen_size, text_height)), (0, icon_height))
             frames.append(frame)
 
