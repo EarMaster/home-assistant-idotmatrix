@@ -100,10 +100,10 @@ Once configured, the integration creates several entities:
 - **Clock: Style**: Choose between different clock display styles
 - **Clock: Color**: Choose the clock's display color (White, Red, Green, Blue, Yellow, Cyan, Magenta, Orange, Pink, or Rainbow)
 - **Effect: Mode**: Select visual effects
-- **Icon & Message: Text Color** / **Icon & Message: Icon Color**: Colors used by Icon & Message. The icon color applies to MDI icons only — image files keep their own colors. Changing either re-sends the message if it is currently on screen.
+- **Icon & Message: Text Color** / **Icon & Message: Icon Color**: Preset colors used by Icon & Message. The icon color applies to MDI icons only — image files keep their own colors. Changing either re-sends the message if it is currently on screen. Any other color can be set with the `idotmatrix.show_icon_message` action; the select then shows `custom`.
 
 ### Actions
-- **`idotmatrix.show_icon_message`**: Show an icon with text below in one step — the easiest way to use Icon & Message from automations and scripts. The action editor offers an MDI icon picker, the text supports templates, and text/icon colors are optional (omit them to keep the current colors). It updates the Icon & Message entities, so they always show what is on screen.
+- **`idotmatrix.show_icon_message`**: Show an icon with text below in one step — the easiest way to use Icon & Message from automations and scripts. The action editor offers an MDI icon picker, the text supports templates, and text/icon colors are optional full-spectrum color pickers (omit them to keep the current colors; in YAML they also accept `[r, g, b]` or a preset name like `orange`). It updates the Icon & Message entities, so they always show what is on screen.
 
 ### Number Entities
 - **Scoreboard: Home**: Home team score (0–999). Setting the value immediately sends both scores to the display.
