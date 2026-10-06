@@ -27,7 +27,7 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 
 `coordinator.py` — `IDotMatrixDataUpdateCoordinator` is the single source of truth. All platforms read state from it and write through its methods.
 
-- **State dict** (`self._state`): `is_on`, `brightness` (0–255), `screen_flipped`, `current_mode` (`clock`/`text`/`effect`/`image`/`chronograph`/`scoreboard`), `clock_style`, `effect_mode`, `last_message`, `last_image`, `last_icon_message`, `scoreboard_home` (0–999), `scoreboard_away` (0–999). Platforms read this via `self.coordinator.data`.
+- **State dict** (`self._state`): `is_on`, `brightness` (0–255), `screen_flipped`, `current_mode` (`clock`/`text`/`effect`/`image`/`chronograph`/`scoreboard`), `clock_style`, `effect_mode`, `last_message`, `last_image`, `last_icon_message`, `last_image_kind` (`file`/`icon_message` — which one Display Mode → image re-sends), `icon_message_text_color`, `icon_message_icon_color`, `scoreboard_home` (0–999), `scoreboard_away` (0–999). Platforms read this via `self.coordinator.data`.
 - **BLE client**: `IDotMatrixClient(screen_size=ScreenSize[...], mac_address=...)` — persistent connection managed via `bleak-retry-connector`. On successful connect, `is_on` is set to `True` (the device has no readable on/off characteristic; connected = on).
 - **Availability**: `_connected` flag toggled by `_ble_connect()` and the Bleak disconnected callback. Each state change schedules `async_request_refresh()` so entities update immediately. `_async_update_data` returns cached `_state` and retries `_ble_connect()` when not connected.
 - **Command serialisation**: `_async_send_command` acquires an `asyncio.Lock` and `await`s the library call. No connect/disconnect per command — the persistent connection is reused.
@@ -43,7 +43,7 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 | `switch` | `async_set_screen_flip(bool)` | `_client.common.set_screen_flipped` |
 | `text` | `async_display_text(msg, size, color, speed)` | `_client.text.show_text` |
 | `text` | `async_display_image(path_or_url)` | `_client.image.set_mode` + `upload_image_file` / `_upload_gif_file` (see below) |
-| `text` | `async_display_icon_message(icon, msg)` | renders composite GIF locally → `_upload_gif_file` |
+| `text` | `async_display_icon_message(icon, msg)` | renders composite GIF locally (static if the text fits, ping-pong scroll otherwise, ≤64 frames) → `_send_gif_blocks` (skips the library's normalisation and its 2 s animation cap) |
 | `select` | `async_set_clock_mode(int)` | `_client.clock.show(style)` |
 | `select` | `async_display_effect(int)` | `_client.effect.show(style, rgb_list)` |
 | `button` | `async_sync_time()` | `_client.common.set_time(datetime)` |
@@ -60,7 +60,7 @@ Brightness conversion: HA uses 0–255, device uses 5–100%. Coordinator conver
 
 **Controls** (no `entity_category`): Display (light), Display Mode (select), Chronograph: Reset/Start/Stop (buttons), Freeze Screen, Reset Device, Sync Time.
 
-**Configuration** (`EntityCategory.CONFIG`): Clock: Style, Effect: Mode, Image: File, Image: Icon & Message, Screen Flip, Text: Message, Scoreboard: Home, Scoreboard: Away.
+**Configuration** (`EntityCategory.CONFIG`): Clock: Style, Effect: Mode, Image: File, Image: Icon & Message, Icon & Message: Text Color, Icon & Message: Icon Color, Screen Flip, Text: Message, Scoreboard: Home, Scoreboard: Away.
 
 ### Base entity
 

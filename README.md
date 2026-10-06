@@ -86,7 +86,7 @@ Once configured, the integration creates several entities:
 ### Text Entities
 - **Text: Message**: Send scrolling text messages to the display
 - **Image: File**: Send any image (PNG, JPEG, BMP, WebP, or animated GIF) by setting a local file path or http(s) URL. Static images are automatically sharpened before upload to improve legibility at small pixel counts.
-- **Image: Icon & Message**: Display an icon in the top portion of the screen with a scrolling text message below. Format: `<icon_source>|<message>`. The icon source can be:
+- **Image: Icon & Message**: Display an icon in the top portion of the screen with a text message below. Format: `<icon_source>|<message>`. A message that fits the screen width is shown centred and still; a longer one scrolls ping-pong style (left-aligned → right-aligned and back, with a short pause at each end), so it never leaves the screen. Very long messages scroll in bigger steps because the device is limited to 64 animation frames. The icon source can be:
   - An MDI icon name: `mdi:home`, `mdi:thermometer`, `mdi:weather-sunny` — the MDI webfont is downloaded and cached automatically on first use
   - A local file path: `/config/www/icons/home.png`
   - An http(s) URL
@@ -97,6 +97,7 @@ Once configured, the integration creates several entities:
 - **Clock: Style**: Choose between different clock display styles
 - **Clock: Color**: Choose the clock's display color (White, Red, Green, Blue, Yellow, Cyan, Magenta, Orange, Pink, or Rainbow)
 - **Effect: Mode**: Select visual effects
+- **Icon & Message: Text Color** / **Icon & Message: Icon Color**: Colors used by **Image: Icon & Message**. The icon color applies to MDI icons only — image files keep their own colors. Changing either re-sends the message if it is currently on screen.
 
 ### Number Entities
 - **Scoreboard: Home**: Home team score (0–999). Setting the value immediately sends both scores to the display.
