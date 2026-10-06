@@ -102,6 +102,8 @@ _GIF_MAX_FRAMES = 64
 _PING_PONG_PAUSE_FRAMES = 6
 _PING_PONG_MS_PER_PX = 70
 _PING_PONG_MAX_FRAME_MS = 150
+_TEXT_GLYPH_GAP_PX = 1
+_TEXT_SPACE_PX = 3
 
 
 class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
@@ -756,17 +758,35 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         icon_x = (screen_size - icon_img.width) // 2
         icon_y = (icon_height - icon_img.height) // 2
 
-        # Render the message once onto a surface exactly as wide as the text.
+        # Render glyph by glyph, trim each to the pixels actually drawn, and join them
+        # with a 1 px gap. This is tighter than the font's own 2 px spacing, and the
+        # width comes from real pixels: mono (fontmode "1") glyphs are 1–2 px wider
+        # than textbbox() reports, which broke the fits-or-scrolls decision.
         font = ImageFont.load_default()
-        dummy = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        dummy = ImageDraw.Draw(Image.new("L", (1, 1)))
         bbox = dummy.textbbox((0, 0), message, font=font)
-        text_width = bbox[2] - bbox[0]
-        char_height = bbox[3] - bbox[1]
-        text_y = max(0, (text_height - char_height) // 2)
-        text_surf = Image.new("RGB", (max(1, text_width), text_height), bg_color)
-        text_draw = ImageDraw.Draw(text_surf)
-        text_draw.fontmode = "1"
-        text_draw.text((-bbox[0], text_y - bbox[1]), message, font=font, fill=text_color)
+        text_y = max(0, (text_height - (bbox[3] - bbox[1])) // 2)
+        glyphs = []
+        for char in message:
+            if char.isspace():
+                glyphs.append(Image.new("L", (_TEXT_SPACE_PX, text_height), 0))
+                continue
+            glyph = Image.new("L", (text_height * 2, text_height), 0)
+            glyph_draw = ImageDraw.Draw(glyph)
+            glyph_draw.fontmode = "1"
+            # Same y for every glyph keeps them on a common baseline.
+            glyph_draw.text((text_height // 2, text_y - bbox[1]), char, font=font, fill=255)
+            ink = glyph.getbbox()
+            if ink:
+                glyphs.append(glyph.crop((ink[0], 0, ink[2], text_height)))
+        text_width = max(1, sum(g.width for g in glyphs) + _TEXT_GLYPH_GAP_PX * (len(glyphs) - 1))
+        mask = Image.new("L", (text_width, text_height), 0)
+        x = 0
+        for glyph in glyphs:
+            mask.paste(glyph, (x, 0))
+            x += glyph.width + _TEXT_GLYPH_GAP_PX
+        text_surf = Image.new("RGB", mask.size, bg_color)
+        text_surf.paste(text_color, mask=mask)
 
         # Text that fits is shown centred and still. Longer text ping-pongs: it starts
         # left-aligned, scrolls until its right edge meets the screen edge, pauses, and
