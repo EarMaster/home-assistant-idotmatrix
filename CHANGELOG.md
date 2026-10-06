@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] - 2026-10-06
+
+### Added
+- `idotmatrix.show_icon_message`: text and icon colors use full-spectrum color pickers; YAML also accepts `[r, g, b]` or a preset name
+
+### Changed
+- **Icon & Message: Text Color** / **Icon Color** selects show `custom` when the action set a non-preset color
+- Icon & Message colors are stored as RGB; preset names saved by 1.7.5–1.8.0 are migrated on startup
+
 ## [1.8.0] - 2026-10-06
 
 ### Added
