@@ -11,8 +11,8 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 - **Conventional commits** — use `feat:`, `fix:`, `docs:`, `chore:`, `refactor:` prefixes. Group by type; only split if two changes of the same type are logically unrelated.
 - **No PowerShell scripts** — use Bash or Python for any tooling.
 - **Version bumps** — always update both `manifest.json` (`"version"`) and `CHANGELOG.md` together.
-- **No custom services** — all control goes through entities (light, switch, text, select, button). Do not document or add `hass.services.async_register()` calls without a matching implementation.
-- **Entity naming** — display names follow `Mode: Detail` convention so related entities sort together in the UI (e.g. `Clock: Style`, `Effect: Mode`, `Text: Message`, `Image: File`, `Image: Icon & Message`, `Chronograph: Start/Stop/Reset`). Entity IDs are derived from `entity_suffix` and are never renamed.
+- **Entities first, actions sparingly** — control goes through entities (light, switch, text, select, button). The one exception is `idotmatrix.show_icon_message` (registered in `__init__.py`), added because an MDI icon picker (`selector: icon`) only exists for action fields. Add an action only when an entity can't offer the UI, and never document one in `services.yaml` without a matching `async_register()` (the other entries there are legacy and have no handlers).
+- **Entity naming** — display names follow `Mode: Detail` convention so related entities sort together in the UI (e.g. `Clock: Style`, `Effect: Mode`, `Text: Message`, `Image: File`, `Icon & Message: Text`, `Chronograph: Start/Stop/Reset`). Entity IDs are derived from `entity_suffix` and are never renamed.
 - **Entity categories** — settings-style entities carry `_attr_entity_category = EntityCategory.CONFIG` (imported from `homeassistant.const`), which places them in a separate "Configuration" section on the HA device page. Action buttons and the main mode/display controls have no category and appear in "Controls".
 
 ## Development workflow
@@ -27,7 +27,7 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 
 `coordinator.py` — `IDotMatrixDataUpdateCoordinator` is the single source of truth. All platforms read state from it and write through its methods.
 
-- **State dict** (`self._state`): `is_on`, `brightness` (0–255), `screen_flipped`, `current_mode` (`clock`/`text`/`effect`/`image`/`chronograph`/`scoreboard`), `clock_style`, `effect_mode`, `last_message`, `last_image`, `last_icon_message`, `last_image_kind` (`file`/`icon_message` — which one Display Mode → image re-sends), `icon_message_text_color`, `icon_message_icon_color`, `scoreboard_home` (0–999), `scoreboard_away` (0–999). Platforms read this via `self.coordinator.data`.
+- **State dict** (`self._state`): `is_on`, `brightness` (0–255), `screen_flipped`, `current_mode` (`clock`/`text`/`effect`/`image`/`chronograph`/`scoreboard`), `clock_style`, `effect_mode`, `last_message`, `last_image`, `icon_message_icon`, `icon_message_text`, `last_image_kind` (`file`/`icon_message` — which one Display Mode → image re-sends), `icon_message_text_color`, `icon_message_icon_color`, `scoreboard_home` (0–999), `scoreboard_away` (0–999). Platforms read this via `self.coordinator.data`.
 - **BLE client**: `IDotMatrixClient(screen_size=ScreenSize[...], mac_address=...)` — persistent connection managed via `bleak-retry-connector`. On successful connect, `is_on` is set to `True` (the device has no readable on/off characteristic; connected = on).
 - **Availability**: `_connected` flag toggled by `_ble_connect()` and the Bleak disconnected callback. Each state change schedules `async_request_refresh()` so entities update immediately. `_async_update_data` returns cached `_state` and retries `_ble_connect()` when not connected.
 - **Command serialisation**: `_async_send_command` acquires an `asyncio.Lock` and `await`s the library call. No connect/disconnect per command — the persistent connection is reused.
@@ -43,7 +43,7 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 | `switch` | `async_set_screen_flip(bool)` | `_client.common.set_screen_flipped` |
 | `text` | `async_display_text(msg, size, color, speed)` | `_client.text.show_text` |
 | `text` | `async_display_image(path_or_url)` | `_client.image.set_mode` + `upload_image_file` / `_upload_gif_file` (see below) |
-| `text` | `async_display_icon_message(icon, msg)` | renders composite GIF locally (static if the text fits, ping-pong scroll otherwise, ≤64 frames) → `_send_gif_blocks` (skips the library's normalisation and its 2 s animation cap) |
+| `text` / `select` / action | `async_update_icon_message(display=…, icon=…, text=…, text_color=…, icon_color=…)` → `async_display_icon_message()` (uses stored settings) | renders composite GIF locally (static if the text fits, ping-pong scroll otherwise, ≤64 frames) → `_send_gif_blocks` (skips the library's normalisation and its 2 s animation cap) |
 | `select` | `async_set_clock_mode(int)` | `_client.clock.show(style)` |
 | `select` | `async_display_effect(int)` | `_client.effect.show(style, rgb_list)` |
 | `button` | `async_sync_time()` | `_client.common.set_time(datetime)` |
@@ -60,7 +60,7 @@ Brightness conversion: HA uses 0–255, device uses 5–100%. Coordinator conver
 
 **Controls** (no `entity_category`): Display (light), Display Mode (select), Chronograph: Reset/Start/Stop (buttons), Freeze Screen, Reset Device, Sync Time.
 
-**Configuration** (`EntityCategory.CONFIG`): Clock: Style, Effect: Mode, Image: File, Image: Icon & Message, Icon & Message: Text Color, Icon & Message: Icon Color, Screen Flip, Text: Message, Scoreboard: Home, Scoreboard: Away.
+**Configuration** (`EntityCategory.CONFIG`): Clock: Style, Effect: Mode, Image: File, Icon & Message: Icon, Icon & Message: Text, Icon & Message: Text Color, Icon & Message: Icon Color, Screen Flip, Text: Message, Scoreboard: Home, Scoreboard: Away.
 
 ### Base entity
 
@@ -111,11 +111,11 @@ custom_components/idotmatrix/
   device_trigger.py    HA device automation triggers
   light.py             display on/off + brightness
   switch.py            screen flip (Configuration section)
-  text.py              Text: Message, Image: File, Image: Icon & Message (Configuration section)
+  text.py              Text: Message, Image: File, Icon & Message: Icon/Text (Configuration section)
   select.py            Display Mode (Controls); Clock: Style, Effect: Mode (Configuration section)
   button.py            Chronograph: Start/Stop/Reset (Controls); Freeze Screen, Reset Device, Sync Time (Controls)
   number.py            Scoreboard: Home, Scoreboard: Away (Configuration section)
-  services.yaml        service UI descriptions (no handlers registered — informational only)
+  services.yaml        action UI descriptions; only show_icon_message has a handler, the rest are legacy
   strings.json         config flow string keys
   translations/en.json English strings for config/options UI
 test_integration.py    standalone smoke test (mocks HA + library)

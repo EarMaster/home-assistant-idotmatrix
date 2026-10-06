@@ -86,10 +86,13 @@ Once configured, the integration creates several entities:
 ### Text Entities
 - **Text: Message**: Send scrolling text messages to the display
 - **Image: File**: Send any image (PNG, JPEG, BMP, WebP, or animated GIF) by setting a local file path or http(s) URL. Static images are automatically sharpened before upload to improve legibility at small pixel counts.
-- **Image: Icon & Message**: Display an icon in the top portion of the screen with a text message below. Format: `<icon_source>|<message>`. A message that fits the screen width is shown centred and still; a longer one scrolls ping-pong style (left-aligned → right-aligned and back, with a short pause at each end), so it never leaves the screen. Very long messages scroll in bigger steps because the device is limited to 64 animation frames. The icon source can be:
+- **Icon & Message: Icon**: Icon shown in the top portion of the screen. One of:
   - An MDI icon name: `mdi:home`, `mdi:thermometer`, `mdi:weather-sunny` — the MDI webfont is downloaded and cached automatically on first use
   - A local file path: `/config/www/icons/home.png`
   - An http(s) URL
+
+  Changing it re-sends the message if Icon & Message is currently on screen.
+- **Icon & Message: Text**: Text shown below the icon; setting it displays icon + text. Text that fits the screen width is shown centred and still; longer text scrolls ping-pong style (left-aligned → right-aligned and back, with a short pause and a small margin at each end), so it never leaves the screen. Very long texts scroll in bigger steps because the device is limited to 64 animation frames.
 - **Countdown: Timer Entity**: Optional — enter a `timer.*` entity ID (e.g. `timer.kitchen`) to sync the iDotMatrix countdown automatically with that HA Timer. When the timer starts, pauses, resumes, or finishes, the display follows. Clear the field to disable the link.
 
 ### Select Entities
@@ -97,7 +100,10 @@ Once configured, the integration creates several entities:
 - **Clock: Style**: Choose between different clock display styles
 - **Clock: Color**: Choose the clock's display color (White, Red, Green, Blue, Yellow, Cyan, Magenta, Orange, Pink, or Rainbow)
 - **Effect: Mode**: Select visual effects
-- **Icon & Message: Text Color** / **Icon & Message: Icon Color**: Colors used by **Image: Icon & Message**. The icon color applies to MDI icons only — image files keep their own colors. Changing either re-sends the message if it is currently on screen.
+- **Icon & Message: Text Color** / **Icon & Message: Icon Color**: Colors used by Icon & Message. The icon color applies to MDI icons only — image files keep their own colors. Changing either re-sends the message if it is currently on screen.
+
+### Actions
+- **`idotmatrix.show_icon_message`**: Show an icon with text below in one step — the easiest way to use Icon & Message from automations and scripts. The action editor offers an MDI icon picker, the text supports templates, and text/icon colors are optional (omit them to keep the current colors). It updates the Icon & Message entities, so they always show what is on screen.
 
 ### Number Entities
 - **Scoreboard: Home**: Home team score (0–999). Setting the value immediately sends both scores to the display.
@@ -196,11 +202,12 @@ automation:
         entity_id: binary_sensor.front_door
         to: "on"
     action:
-      - action: text.set_value
-        target:
-          entity_id: text.idotmatrix_icon_message
+      - action: idotmatrix.show_icon_message
         data:
-          value: "mdi:door-open|Front door open"
+          device_id: <your iDotMatrix device id>
+          icon: mdi:door-open
+          text: Front door open
+          icon_color: orange
 ```
 
 ### Icon & Message — Temperature Display
@@ -211,11 +218,25 @@ automation:
       - platform: state
         entity_id: sensor.living_room_temperature
     action:
+      - action: idotmatrix.show_icon_message
+        data:
+          device_id: <your iDotMatrix device id>
+          icon: mdi:thermometer
+          text: "{{ states('sensor.living_room_temperature') }}°C"
+```
+
+The Icon & Message entities work too — set the icon first, then the text (setting the text displays it):
+```yaml
       - action: text.set_value
         target:
-          entity_id: text.idotmatrix_icon_message
+          entity_id: text.idotmatrix_icon_message_icon
         data:
-          value: "mdi:thermometer|{{ states('sensor.living_room_temperature') }}°C"
+          value: mdi:thermometer
+      - action: text.set_value
+        target:
+          entity_id: text.idotmatrix_icon_message_text
+        data:
+          value: "{{ states('sensor.living_room_temperature') }}°C"
 ```
 
 ## Troubleshooting
