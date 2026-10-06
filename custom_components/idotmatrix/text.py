@@ -83,7 +83,10 @@ class IDotMatrixImageDisplay(IDotMatrixEntity, TextEntity):
 
 
 class IDotMatrixIconMessage(IDotMatrixEntity, TextEntity):
-    """Show an icon on the top portion of the display with scrolling text below.
+    """Show an icon on the top portion of the display with text below.
+
+    Text that fits is shown still and centred; longer text scrolls ping-pong style.
+    Colors are set via the Icon & Message: Text/Icon Color selects.
 
     Value format: ``<icon_source>|<message>``
 

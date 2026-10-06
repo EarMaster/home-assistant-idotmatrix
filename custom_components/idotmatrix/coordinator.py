@@ -43,7 +43,8 @@ _PERSIST_KEYS = frozenset({
     "brightness", "screen_flipped",
     "clock_style", "clock_show_date", "clock_hour24", "clock_color",
     "effect_mode",
-    "last_message", "last_image", "last_icon_message",
+    "last_message", "last_image", "last_icon_message", "last_image_kind",
+    "icon_message_text_color", "icon_message_icon_color",
     "scoreboard_home", "scoreboard_away",
     "countdown_minutes", "countdown_seconds", "countdown_timer_entity",
 })
@@ -96,6 +97,12 @@ _GIF_ACK_PREFIX = b"\x05\x00\x01\x00"
 _GIF_ACK_TIMEOUT_S = 3.0
 _GIF_PACKET_DELAY_S = 0.02
 
+# Icon & Message animation: the device handles at most 64 GIF frames.
+_GIF_MAX_FRAMES = 64
+_PING_PONG_PAUSE_FRAMES = 6
+_PING_PONG_MS_PER_PX = 70
+_PING_PONG_MAX_FRAME_MS = 150
+
 
 class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
     """Manage data updates for an iDotMatrix device."""
@@ -128,6 +135,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             "last_message": "",
             "last_image": "",
             "last_icon_message": "",
+            "last_image_kind": "file",
+            "icon_message_text_color": "white",
+            "icon_message_icon_color": "white",
             "scoreboard_home": 0,
             "scoreboard_away": 0,
             "countdown_minutes": 0,
@@ -448,38 +458,55 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             return False
         if success:
             self._state["current_mode"] = "image"
+            self._state["last_image_kind"] = "file"
             self._state["last_image"] = image_source
             self._fire_event("image_displayed", {"source": image_source})
         return success
 
-    async def async_display_icon_message(
-        self,
-        icon_source: str,
-        message: str,
-        text_color: tuple = (255, 255, 255),
-        bg_color: tuple = (0, 0, 0),
-    ) -> bool:
-        """Display an icon on the top portion and scrolling text on the bottom."""
+    async def async_display_icon_message(self, icon_source: str, message: str) -> bool:
+        """Display an icon on the top portion and the message on the bottom.
+
+        Colors come from the Icon & Message color selects; the icon color only
+        applies to MDI icons (image files keep their own colors).
+        """
+        text_color = COLOR_PRESETS.get(self._state.get("icon_message_text_color", "white"), (255, 255, 255))
+        icon_color = COLOR_PRESETS.get(self._state.get("icon_message_icon_color", "white"), (255, 255, 255))
         try:
             if icon_source.startswith("mdi:"):
-                icon_data = await self._get_mdi_icon_bytes(icon_source[4:])
+                icon_data = await self._get_mdi_icon_bytes(icon_source[4:], icon_color)
             else:
                 icon_data = await self._fetch_image_data(icon_source)
             gif_data = await self.hass.async_add_executor_job(
                 self._create_icon_message_gif,
-                icon_data, message, self.screen_size_px, text_color, bg_color,
+                icon_data, message, self.screen_size_px, text_color, (0, 0, 0),
             )
-            success = await self._upload_image_data(gif_data, is_gif=True)
+            # The GIF is already canvas-sized with a tiny palette, so it skips the
+            # library's normalisation (which would also cap the animation at 2 s).
+            success = await self._async_send_command(self._send_gif_blocks, gif_data)
         except Exception as ex:
             _LOGGER.warning("Failed to display icon+message: %s", ex)
             return False
         if success:
             self._state["current_mode"] = "image"
+            self._state["last_image_kind"] = "icon_message"
             self._state["last_icon_message"] = f"{icon_source}|{message}"
             self._fire_event("image_displayed", {"message": message})
         return success
 
-    async def _get_mdi_icon_bytes(self, icon_name: str) -> bytes:
+    async def async_set_icon_message_color(self, target: str, color_name: str) -> bool:
+        """Set the text or icon color and re-send the message if it is on screen."""
+        self._state[f"icon_message_{target}_color"] = color_name
+        icon_msg = self._state.get("last_icon_message", "")
+        if (
+            self._state.get("current_mode") == "image"
+            and self._state.get("last_image_kind") == "icon_message"
+            and "|" in icon_msg
+        ):
+            icon_source, _, message = icon_msg.partition("|")
+            return await self.async_display_icon_message(icon_source, message)
+        return True
+
+    async def _get_mdi_icon_bytes(self, icon_name: str, color: tuple) -> bytes:
         """Return PNG bytes for an MDI icon, downloading the font/CSS on first use."""
         font_path = self.hass.config.path(".storage/idotmatrix_mdi_font.ttf")
         css_path = self.hass.config.path(".storage/idotmatrix_mdi_icons.css")
@@ -502,12 +529,14 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         # needs no rescaling (rescaling a square render into the strip squished it).
         icon_height = max(8, int(self.screen_size_px * 0.55))
         return await self.hass.async_add_executor_job(
-            self._render_mdi_icon, icon_name, font_path, css_path, icon_height
+            self._render_mdi_icon, icon_name, font_path, css_path, icon_height, color
         )
 
     @classmethod
-    def _render_mdi_icon(cls, icon_name: str, font_path: str, css_path: str, size: int) -> bytes:
-        """Render an MDI icon to a square white-on-black RGB PNG."""
+    def _render_mdi_icon(
+        cls, icon_name: str, font_path: str, css_path: str, size: int, color: tuple = (255, 255, 255)
+    ) -> bytes:
+        """Render an MDI icon in the given color to a square RGB PNG on black."""
         import re
         from PIL import Image, ImageDraw, ImageFont
 
@@ -549,7 +578,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         )
         x = (size - (bbox[2] - bbox[0])) // 2 - bbox[0]
         y = (size - (bbox[3] - bbox[1])) // 2 - bbox[1]
-        draw.text((x, y), char, font=font, fill=(255, 255, 255))
+        draw.text((x, y), char, font=font, fill=color)
 
         pixels = list(img.getdata())
         non_black = sum(1 for p in pixels if p != (0, 0, 0))
@@ -616,20 +645,23 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             await self.hass.async_add_executor_job(os.unlink, tmp_path)
 
     async def _upload_gif_file(self, file_path: str) -> None:
-        """Upload a GIF block by block, waiting for the device's ack after each block.
-
-        Replaces the library's upload_gif_file(), which sends every block back to back
-        without flow control. Reuses the library's GIF normalisation and packet builder.
-        """
+        """Normalise an arbitrary GIF with the library, then upload it block by block."""
         from idotmatrix.util.image_utils import ResizeMode
 
-        gif_module = self._client.gif
         gif_data = await self.hass.async_add_executor_job(
-            gif_module._load_gif_and_adapt_to_canvas,
+            self._client.gif._load_gif_and_adapt_to_canvas,
             file_path, self.screen_size_px, ResizeMode.FIT, True, (0, 0, 0), None,
         )
+        await self._send_gif_blocks(gif_data)
+
+    async def _send_gif_blocks(self, gif_data: bytes) -> None:
+        """Upload canvas-sized GIF bytes block by block, waiting for the device's ack after each.
+
+        Replaces the library's upload_gif_file(), which sends every block back to back
+        without flow control. Reuses the library's packet builder.
+        """
         # gif_type 12 = no time signature, same as the library's upload_gif_file()
-        blocks = gif_module.create_gif_data_packets(gif_data, gif_type=12, time_sign=1)
+        blocks = self._client.gif.create_gif_data_packets(gif_data, gif_type=12, time_sign=1)
         client = self._client._connection_manager.client
         _LOGGER.debug(
             "Uploading GIF to %s: %d bytes in %d block(s)", self.mac_address, len(gif_data), len(blocks)
@@ -724,46 +756,54 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         icon_x = (screen_size - icon_img.width) // 2
         icon_y = (icon_height - icon_img.height) // 2
 
-        # Measure text using default bitmap font
+        # Render the message once onto a surface exactly as wide as the text.
         font = ImageFont.load_default()
         dummy = ImageDraw.Draw(Image.new("RGB", (1, 1)))
         bbox = dummy.textbbox((0, 0), message, font=font)
         text_width = bbox[2] - bbox[0]
         char_height = bbox[3] - bbox[1]
         text_y = max(0, (text_height - char_height) // 2)
-
-        # Build wide text surface: leading blank + text + trailing blank
-        surface_w = screen_size + text_width + screen_size
-        text_surf = Image.new("RGB", (surface_w, text_height), bg_color)
+        text_surf = Image.new("RGB", (max(1, text_width), text_height), bg_color)
         text_draw = ImageDraw.Draw(text_surf)
         text_draw.fontmode = "1"
-        text_draw.text((screen_size, text_y), message, font=font, fill=text_color)
+        text_draw.text((-bbox[0], text_y - bbox[1]), message, font=font, fill=text_color)
 
-        # Calculate frame count to stay within device GIF limits (64 frames, 2000 ms total)
-        total_scroll = screen_size + text_width
-        max_frames = 60
-        px_per_frame = max(1, math.ceil(total_scroll / max_frames))
-        num_frames = math.ceil(total_scroll / px_per_frame)
-        frame_ms = max(16, math.floor(2000 / num_frames))
+        # Text that fits is shown centred and still. Longer text ping-pongs: it starts
+        # left-aligned, scrolls until its right edge meets the screen edge, pauses, and
+        # scrolls back, so it never leaves the screen. Frame count stays within the
+        # device's 64-frame limit by scrolling more pixels per frame for long text.
+        overflow = text_width - screen_size
+        if overflow <= 0:
+            positions = [(screen_size - text_width) // 2]
+            frame_ms = 1000
+        else:
+            max_steps = (_GIF_MAX_FRAMES - 2 * _PING_PONG_PAUSE_FRAMES) // 2
+            step = math.ceil(overflow / max_steps)
+            offsets = list(range(0, overflow, step)) + [overflow]
+            positions = (
+                [-offsets[0]] * _PING_PONG_PAUSE_FRAMES
+                + [-o for o in offsets[1:-1]]
+                + [-offsets[-1]] * _PING_PONG_PAUSE_FRAMES
+                + [-o for o in reversed(offsets[1:-1])]
+            )
+            frame_ms = min(_PING_PONG_MAX_FRAME_MS, _PING_PONG_MS_PER_PX * step)
 
         frames = []
-        for i in range(num_frames):
-            offset = i * px_per_frame
+        for x in positions:
             frame = Image.new("RGB", (screen_size, screen_size), bg_color)
             frame.paste(icon_img, (icon_x, icon_y))
-            frame.paste(text_surf.crop((offset, 0, offset + screen_size, text_height)), (0, icon_height))
-            frames.append(frame)
+            frame.paste(text_surf, (x, icon_height))
+            # Same palette conversion as the library's GIF normalisation.
+            frames.append(frame.convert("P", palette=Image.Palette.ADAPTIVE, colors=256))
 
         import logging as _logging
-        icon_pixels = list(icon_img.getdata())
-        icon_non_black = sum(1 for p in icon_pixels if p != (0, 0, 0))
         _logging.getLogger(__name__).debug(
-            "icon+message GIF: screen=%d icon_height=%d text_height=%d "
-            "frames=%d duration=%dms icon_non_black=%d/%d msg_w=%d",
-            screen_size, icon_height, text_height,
-            num_frames, frame_ms, icon_non_black, len(icon_pixels), text_width,
+            "icon+message GIF: screen=%d icon_height=%d text_height=%d msg_w=%d "
+            "frames=%d duration=%dms",
+            screen_size, icon_height, text_height, text_width, len(frames), frame_ms,
         )
 
+        # Same encoder settings as the library: it notes optimize=False breaks uploads.
         out = io.BytesIO()
         frames[0].save(
             out,
@@ -772,7 +812,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             append_images=frames[1:],
             duration=frame_ms,
             loop=0,
-            optimize=False,
+            optimize=True,
+            disposal=2,
         )
         gif_bytes = out.getvalue()
         _logging.getLogger(__name__).debug(

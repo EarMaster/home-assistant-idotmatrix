@@ -24,6 +24,8 @@ async def async_setup_entry(
         IDotMatrixClockStyleSelect(coordinator),
         IDotMatrixClockColorSelect(coordinator),
         IDotMatrixEffectSelect(coordinator),
+        IDotMatrixIconMessageColorSelect(coordinator, "text"),
+        IDotMatrixIconMessageColorSelect(coordinator, "icon"),
     ])
 
 
@@ -63,13 +65,14 @@ class IDotMatrixDisplayModeSelect(IDotMatrixEntity, SelectEntity):
         elif option == "image":
             src = self.coordinator.data.get("last_image", "")
             icon_msg = self.coordinator.data.get("last_icon_message", "")
-            if src:
-                await self.coordinator.async_display_image(src)
-            elif icon_msg and "|" in icon_msg:
+            prefer_icon_msg = self.coordinator.data.get("last_image_kind") == "icon_message"
+            if icon_msg and "|" in icon_msg and (prefer_icon_msg or not src):
                 icon_source, _, message = icon_msg.partition("|")
                 await self.coordinator.async_display_icon_message(
                     icon_source.strip(), message.strip()
                 )
+            elif src:
+                await self.coordinator.async_display_image(src)
         elif option == "chronograph":
             await self.coordinator.async_start_chronograph()
         elif option == "scoreboard":
@@ -122,6 +125,26 @@ class IDotMatrixClockColorSelect(IDotMatrixEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         await self.coordinator.async_set_clock_color(option)
+        await self.coordinator.async_request_refresh()
+
+
+class IDotMatrixIconMessageColorSelect(IDotMatrixEntity, SelectEntity):
+    """Text or icon color for Image: Icon & Message (icon color applies to MDI icons only)."""
+
+    def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator, target: str) -> None:
+        super().__init__(coordinator, f"icon_message_{target}_color")
+        self._target = target
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_name = f"Icon & Message: {target.capitalize()} Color"
+        self._attr_icon = "mdi:palette"
+        self._attr_options = list(COLOR_PRESETS.keys())
+
+    @property
+    def current_option(self) -> str | None:
+        return self.coordinator.data.get(f"icon_message_{self._target}_color", "white")
+
+    async def async_select_option(self, option: str) -> None:
+        await self.coordinator.async_set_icon_message_color(self._target, option)
         await self.coordinator.async_request_refresh()
 
 
