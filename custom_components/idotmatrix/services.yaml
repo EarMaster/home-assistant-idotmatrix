@@ -31,38 +31,22 @@ show_icon_message:
         text:
     text_color:
       name: Text color
-      description: Text color. Leave empty to keep the current Icon & Message text color.
+      description: >-
+        Any color from the color picker. In YAML, also [r, g, b] or a preset name
+        (red, green, blue, yellow, cyan, magenta, white, orange, purple, pink).
+        Leave empty to keep the current Icon & Message text color.
+      example: [255, 165, 0]
       selector:
-        select:
-          options:
-            - red
-            - green
-            - blue
-            - yellow
-            - cyan
-            - magenta
-            - white
-            - orange
-            - purple
-            - pink
+        color_rgb:
     icon_color:
       name: Icon color
       description: >-
-        Icon color (MDI icons only). Leave empty to keep the current Icon & Message
+        Icon color (MDI icons only). Any color from the color picker; in YAML also
+        [r, g, b] or a preset name. Leave empty to keep the current Icon & Message
         icon color.
+      example: [255, 0, 0]
       selector:
-        select:
-          options:
-            - red
-            - green
-            - blue
-            - yellow
-            - cyan
-            - magenta
-            - white
-            - orange
-            - purple
-            - pink
+        color_rgb:
 
 display_text:
   name: Display Text

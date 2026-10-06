@@ -14,12 +14,25 @@ from .coordinator import IDotMatrixDataUpdateCoordinator
 
 SERVICE_SHOW_ICON_MESSAGE = "show_icon_message"
 
+
+def _rgb_color(value):
+    """Accept a preset color name or an [r, g, b] list (what the color picker sends)."""
+    if isinstance(value, str) and value in COLOR_PRESETS:
+        return list(COLOR_PRESETS[value])
+    try:
+        return list(vol.Schema(vol.ExactSequence((cv.byte, cv.byte, cv.byte)))(list(value)))
+    except (vol.Invalid, TypeError) as ex:
+        raise vol.Invalid(
+            f"expected [r, g, b] with values 0–255 or one of {', '.join(COLOR_PRESETS)}, got {value!r}"
+        ) from ex
+
+
 SHOW_ICON_MESSAGE_SCHEMA = vol.Schema({
     vol.Required("device_id"): vol.All(cv.ensure_list, [cv.string]),
     vol.Required("icon"): cv.string,
     vol.Required("text"): cv.string,
-    vol.Optional("text_color"): vol.In(list(COLOR_PRESETS)),
-    vol.Optional("icon_color"): vol.In(list(COLOR_PRESETS)),
+    vol.Optional("text_color"): _rgb_color,
+    vol.Optional("icon_color"): _rgb_color,
 })
 
 

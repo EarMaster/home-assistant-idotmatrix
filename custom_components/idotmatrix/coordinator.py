@@ -140,8 +140,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             "icon_message_icon": "mdi:information-outline",
             "icon_message_text": "",
             "last_image_kind": "file",
-            "icon_message_text_color": "white",
-            "icon_message_icon_color": "white",
+            # Stored as [r, g, b] so the action can use any color, not just presets.
+            "icon_message_text_color": [255, 255, 255],
+            "icon_message_icon_color": [255, 255, 255],
             "scoreboard_home": 0,
             "scoreboard_away": 0,
             "countdown_minutes": 0,
@@ -189,6 +190,10 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 icon_source, _, message = legacy.partition("|")
                 self._state["icon_message_icon"] = icon_source.strip()
                 self._state["icon_message_text"] = message.strip()
+            # 1.7.5–1.8.0 stored Icon & Message colors as preset names.
+            for key in ("icon_message_text_color", "icon_message_icon_color"):
+                if isinstance(self._state[key], str):
+                    self._state[key] = list(COLOR_PRESETS.get(self._state[key], (255, 255, 255)))
             saved_timer = stored.get("countdown_timer_entity", "")
             if saved_timer:
                 # Re-subscribe without triggering an immediate BLE command —
@@ -485,8 +490,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         if not icon_source or not message:
             _LOGGER.warning("Icon & Message needs both an icon and a text to display")
             return False
-        text_color = COLOR_PRESETS.get(self._state.get("icon_message_text_color", "white"), (255, 255, 255))
-        icon_color = COLOR_PRESETS.get(self._state.get("icon_message_icon_color", "white"), (255, 255, 255))
+        text_color = tuple(self._state["icon_message_text_color"])
+        icon_color = tuple(self._state["icon_message_icon_color"])
         try:
             if icon_source.startswith("mdi:"):
                 icon_data = await self._get_mdi_icon_bytes(icon_source[4:], icon_color)
@@ -511,7 +516,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
     async def async_update_icon_message(self, display: bool = False, **settings: str) -> bool:
         """Store Icon & Message settings, then display if asked to or if it is on screen.
 
-        settings keys: icon, text, text_color, icon_color.
+        settings keys: icon, text, text_color, icon_color (colors as [r, g, b]).
         """
         for key, value in settings.items():
             self._state[f"icon_message_{key}"] = value
