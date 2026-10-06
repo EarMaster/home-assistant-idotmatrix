@@ -43,8 +43,8 @@ _PERSIST_KEYS = frozenset({
     "brightness", "screen_flipped",
     "clock_style", "clock_show_date", "clock_hour24", "clock_color",
     "effect_mode",
-    "last_message", "last_image", "last_icon_message", "last_image_kind",
-    "icon_message_text_color", "icon_message_icon_color",
+    "last_message", "last_image", "last_image_kind",
+    "icon_message_icon", "icon_message_text", "icon_message_text_color", "icon_message_icon_color",
     "scoreboard_home", "scoreboard_away",
     "countdown_minutes", "countdown_seconds", "countdown_timer_entity",
 })
@@ -104,6 +104,7 @@ _PING_PONG_MS_PER_PX = 70
 _PING_PONG_MAX_FRAME_MS = 150
 _TEXT_GLYPH_GAP_PX = 1
 _TEXT_SPACE_PX = 3
+_SCROLL_PADDING_PX = 2
 
 
 class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
@@ -136,7 +137,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             "effect_mode": _DEFAULT_EFFECT_MODE,
             "last_message": "",
             "last_image": "",
-            "last_icon_message": "",
+            "icon_message_icon": "mdi:information-outline",
+            "icon_message_text": "",
             "last_image_kind": "file",
             "icon_message_text_color": "white",
             "icon_message_icon_color": "white",
@@ -181,6 +183,12 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             for key, value in stored.items():
                 if key in _PERSIST_KEYS:
                     self._state[key] = value
+            # Pre-1.8 stored icon and message combined as "icon|message".
+            legacy = stored.get("last_icon_message", "")
+            if "|" in legacy and "icon_message_text" not in stored:
+                icon_source, _, message = legacy.partition("|")
+                self._state["icon_message_icon"] = icon_source.strip()
+                self._state["icon_message_text"] = message.strip()
             saved_timer = stored.get("countdown_timer_entity", "")
             if saved_timer:
                 # Re-subscribe without triggering an immediate BLE command —
@@ -465,12 +473,18 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             self._fire_event("image_displayed", {"source": image_source})
         return success
 
-    async def async_display_icon_message(self, icon_source: str, message: str) -> bool:
-        """Display an icon on the top portion and the message on the bottom.
+    async def async_display_icon_message(self) -> bool:
+        """Display the stored icon on the top portion and the stored text below.
 
-        Colors come from the Icon & Message color selects; the icon color only
-        applies to MDI icons (image files keep their own colors).
+        Icon, text and colors come from the Icon & Message entities (or the
+        show_icon_message action); the icon color only applies to MDI icons
+        (image files keep their own colors).
         """
+        icon_source = self._state.get("icon_message_icon", "").strip()
+        message = self._state.get("icon_message_text", "").strip()
+        if not icon_source or not message:
+            _LOGGER.warning("Icon & Message needs both an icon and a text to display")
+            return False
         text_color = COLOR_PRESETS.get(self._state.get("icon_message_text_color", "white"), (255, 255, 255))
         icon_color = COLOR_PRESETS.get(self._state.get("icon_message_icon_color", "white"), (255, 255, 255))
         try:
@@ -491,21 +505,22 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         if success:
             self._state["current_mode"] = "image"
             self._state["last_image_kind"] = "icon_message"
-            self._state["last_icon_message"] = f"{icon_source}|{message}"
             self._fire_event("image_displayed", {"message": message})
         return success
 
-    async def async_set_icon_message_color(self, target: str, color_name: str) -> bool:
-        """Set the text or icon color and re-send the message if it is on screen."""
-        self._state[f"icon_message_{target}_color"] = color_name
-        icon_msg = self._state.get("last_icon_message", "")
-        if (
+    async def async_update_icon_message(self, display: bool = False, **settings: str) -> bool:
+        """Store Icon & Message settings, then display if asked to or if it is on screen.
+
+        settings keys: icon, text, text_color, icon_color.
+        """
+        for key, value in settings.items():
+            self._state[f"icon_message_{key}"] = value
+        on_screen = (
             self._state.get("current_mode") == "image"
             and self._state.get("last_image_kind") == "icon_message"
-            and "|" in icon_msg
-        ):
-            icon_source, _, message = icon_msg.partition("|")
-            return await self.async_display_icon_message(icon_source, message)
+        )
+        if display or on_screen:
+            return await self.async_display_icon_message()
         return True
 
     async def _get_mdi_icon_bytes(self, icon_name: str, color: tuple) -> bytes:
@@ -792,20 +807,21 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         # left-aligned, scrolls until its right edge meets the screen edge, pauses, and
         # scrolls back, so it never leaves the screen. Frame count stays within the
         # device's 64-frame limit by scrolling more pixels per frame for long text.
-        overflow = text_width - screen_size
-        if overflow <= 0:
+        # Scrolling text keeps a small gap to the screen edges at both turning points.
+        overflow = text_width + 2 * _SCROLL_PADDING_PX - screen_size
+        if text_width <= screen_size:
             positions = [(screen_size - text_width) // 2]
             frame_ms = 1000
         else:
             max_steps = (_GIF_MAX_FRAMES - 2 * _PING_PONG_PAUSE_FRAMES) // 2
             step = math.ceil(overflow / max_steps)
             offsets = list(range(0, overflow, step)) + [overflow]
-            positions = (
-                [-offsets[0]] * _PING_PONG_PAUSE_FRAMES
-                + [-o for o in offsets[1:-1]]
-                + [-offsets[-1]] * _PING_PONG_PAUSE_FRAMES
-                + [-o for o in reversed(offsets[1:-1])]
-            )
+            positions = [_SCROLL_PADDING_PX - o for o in (
+                [offsets[0]] * _PING_PONG_PAUSE_FRAMES
+                + offsets[1:-1]
+                + [offsets[-1]] * _PING_PONG_PAUSE_FRAMES
+                + offsets[-2:0:-1]
+            )]
             frame_ms = min(_PING_PONG_MAX_FRAME_MS, _PING_PONG_MS_PER_PX * step)
 
         frames = []

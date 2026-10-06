@@ -64,13 +64,10 @@ class IDotMatrixDisplayModeSelect(IDotMatrixEntity, SelectEntity):
             await self.coordinator.async_display_effect(EFFECT_TYPES[effect_name])
         elif option == "image":
             src = self.coordinator.data.get("last_image", "")
-            icon_msg = self.coordinator.data.get("last_icon_message", "")
+            has_icon_msg = bool(self.coordinator.data.get("icon_message_text"))
             prefer_icon_msg = self.coordinator.data.get("last_image_kind") == "icon_message"
-            if icon_msg and "|" in icon_msg and (prefer_icon_msg or not src):
-                icon_source, _, message = icon_msg.partition("|")
-                await self.coordinator.async_display_icon_message(
-                    icon_source.strip(), message.strip()
-                )
+            if has_icon_msg and (prefer_icon_msg or not src):
+                await self.coordinator.async_display_icon_message()
             elif src:
                 await self.coordinator.async_display_image(src)
         elif option == "chronograph":
@@ -144,7 +141,7 @@ class IDotMatrixIconMessageColorSelect(IDotMatrixEntity, SelectEntity):
         return self.coordinator.data.get(f"icon_message_{self._target}_color", "white")
 
     async def async_select_option(self, option: str) -> None:
-        await self.coordinator.async_set_icon_message_color(self._target, option)
+        await self.coordinator.async_update_icon_message(**{f"{self._target}_color": option})
         await self.coordinator.async_request_refresh()
 
 

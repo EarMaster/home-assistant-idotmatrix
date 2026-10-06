@@ -7,6 +7,7 @@ from homeassistant.components.text import TextEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
@@ -23,10 +24,20 @@ async def async_setup_entry(
 ) -> None:
     """Set up the text platform."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
+
+    # The combined "icon|message" entity was replaced by separate Icon and Text
+    # entities; drop its registry entry so it doesn't linger as unavailable.
+    registry = er.async_get(hass)
+    if old_entity_id := registry.async_get_entity_id(
+        "text", DOMAIN, f"{coordinator.mac_address}_icon_message"
+    ):
+        registry.async_remove(old_entity_id)
+
     async_add_entities([
         IDotMatrixText(coordinator),
         IDotMatrixImageDisplay(coordinator),
-        IDotMatrixIconMessage(coordinator),
+        IDotMatrixIconMessageIcon(coordinator),
+        IDotMatrixIconMessageText(coordinator),
         IDotMatrixCountdownTimer(coordinator),
     ])
 
@@ -82,55 +93,61 @@ class IDotMatrixImageDisplay(IDotMatrixEntity, TextEntity):
         await self.coordinator.async_request_refresh()
 
 
-class IDotMatrixIconMessage(IDotMatrixEntity, TextEntity):
-    """Show an icon on the top portion of the display with text below.
+class IDotMatrixIconMessageIcon(IDotMatrixEntity, TextEntity):
+    """Icon shown in the top portion of the display by Icon & Message.
 
-    Text that fits is shown still and centred; longer text scrolls ping-pong style.
-    Colors are set via the Icon & Message: Text/Icon Color selects.
-
-    Value format: ``<icon_source>|<message>``
-
-    ``<icon_source>`` is one of:
+    One of:
     - An MDI icon name: ``mdi:home``, ``mdi:thermometer``, ``mdi:weather-sunny``
+      (the MDI webfont is downloaded and cached on first use)
     - A local file path: ``/config/www/icons/home.png``
     - An http(s) URL to a PNG/JPEG image
 
-    The MDI webfont is downloaded and cached on first use.
-
-    Examples::
-
-        mdi:home|Welcome home!
-        mdi:thermometer|23°C
-        /config/www/logo.png|Server online
+    Changing it re-sends the message if Icon & Message is currently on screen.
     """
 
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
-        """Initialize the icon+message entity."""
-        super().__init__(coordinator, "icon_message")
+        """Initialize the icon entity."""
+        super().__init__(coordinator, "icon_message_icon")
         self._attr_entity_category = EntityCategory.CONFIG
-        self._attr_name = "Image: Icon & Message"
-        self._attr_icon = "mdi:image-text"
-        self._attr_max = 2048
+        self._attr_name = "Icon & Message: Icon"
+        self._attr_icon = "mdi:emoticon-outline"
+        self._attr_max = 255
         self._attr_min = 0
 
     @property
     def native_value(self) -> str | None:
-        """Return the last icon+message value that was set."""
-        return self.coordinator.data.get("last_icon_message", "")
+        """Return the stored icon."""
+        return self.coordinator.data.get("icon_message_icon", "")
 
     async def async_set_value(self, value: str) -> None:
-        """Parse 'icon_path|message' and display the composite animation."""
-        if "|" not in value:
-            _LOGGER.warning(
-                "Icon & Message value must be in format 'icon_source|message', got: %r", value
-            )
-            return
-        icon_source, _, message = value.partition("|")
-        icon_source = icon_source.strip()
-        message = message.strip()
-        if not icon_source or not message:
-            return
-        await self.coordinator.async_display_icon_message(icon_source, message)
+        """Store the icon and refresh the display if the message is showing."""
+        await self.coordinator.async_update_icon_message(icon=value.strip())
+        await self.coordinator.async_request_refresh()
+
+
+class IDotMatrixIconMessageText(IDotMatrixEntity, TextEntity):
+    """Text shown below the icon; setting it displays Icon & Message.
+
+    Text that fits is shown still and centred; longer text scrolls ping-pong style.
+    """
+
+    def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
+        """Initialize the text entity."""
+        super().__init__(coordinator, "icon_message_text")
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_name = "Icon & Message: Text"
+        self._attr_icon = "mdi:image-text"
+        self._attr_max = 255
+        self._attr_min = 0
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the stored text."""
+        return self.coordinator.data.get("icon_message_text", "")
+
+    async def async_set_value(self, value: str) -> None:
+        """Store the text and display icon + text."""
+        await self.coordinator.async_update_icon_message(display=True, text=value.strip())
         await self.coordinator.async_request_refresh()
 
 

@@ -1,3 +1,69 @@
+show_icon_message:
+  name: Show Icon & Message
+  description: >-
+    Show an icon in the top portion of the display with text below. Text that fits
+    is shown still; longer text scrolls back and forth. Also updates the
+    Icon & Message entities.
+  fields:
+    device_id:
+      name: Display
+      description: The iDotMatrix display(s) to show the message on
+      required: true
+      selector:
+        device:
+          integration: idotmatrix
+          multiple: true
+    icon:
+      name: Icon
+      description: >-
+        An MDI icon (e.g. mdi:bell). In YAML mode this can also be a local file
+        path (/config/www/icons/home.png) or an http(s) image URL.
+      required: true
+      example: mdi:bell
+      selector:
+        icon:
+    text:
+      name: Text
+      description: Text shown below the icon. Supports templates.
+      required: true
+      example: "{{ states('sensor.outside_temperature') }}°C"
+      selector:
+        text:
+    text_color:
+      name: Text color
+      description: Text color. Leave empty to keep the current Icon & Message text color.
+      selector:
+        select:
+          options:
+            - red
+            - green
+            - blue
+            - yellow
+            - cyan
+            - magenta
+            - white
+            - orange
+            - purple
+            - pink
+    icon_color:
+      name: Icon color
+      description: >-
+        Icon color (MDI icons only). Leave empty to keep the current Icon & Message
+        icon color.
+      selector:
+        select:
+          options:
+            - red
+            - green
+            - blue
+            - yellow
+            - cyan
+            - magenta
+            - white
+            - orange
+            - purple
+            - pink
+
 display_text:
   name: Display Text
   description: Display a text message on the iDotMatrix display
