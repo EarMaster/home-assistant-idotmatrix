@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.5] - 2026-10-06
+
+### Added
+- **Icon & Message: Text Color** and **Icon & Message: Icon Color** selects (icon color applies to MDI icons; changing either re-sends the message if it is on screen)
+
+### Changed
+- **Image: Icon & Message** shows text that fits the screen centred and still; longer text scrolls ping-pong style (left-aligned → right-aligned and back with a pause at each end) so it never leaves the screen
+- Icon & Message animations are no longer squeezed into 2 seconds by the library's GIF re-encoding
+
+### Fixed
+- **Display Mode** → `image` now re-sends whichever was shown last (icon message or image file) instead of always preferring the image file
+
 ## [1.7.4] - 2026-10-06
 
 ### Fixed
