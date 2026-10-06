@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-10-06
+
+### Added
+- `idotmatrix.show_icon_message` action: MDI icon picker, text with template support, optional text/icon colors
+- **Icon & Message: Icon** and **Icon & Message: Text** entities (setting the text displays it; changing the icon re-sends it if on screen)
+
+### Changed
+- Removed the combined **Image: Icon & Message** entity (`icon|message` format). Automations using `text.…_icon_message` must switch to the new entities or the action. Its last value is migrated to the new entities on first start
+- Scrolling Icon & Message text keeps a 2 px margin to the screen edges at both turning points
+
 ## [1.7.6] - 2026-10-06
 
 ### Fixed
