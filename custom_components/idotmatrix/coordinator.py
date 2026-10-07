@@ -14,11 +14,16 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_call_later, async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_change,
+)
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 import homeassistant.util.dt as dt_util
 
+from . import preview
 from .const import (
     CLOCK_STYLES,
     COLOR_PRESETS,
@@ -139,6 +144,13 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         # nothing else was shown since it was scheduled.
         self._content_generation = 0
         self._pending_restore: dict[str, Any] | None = None
+        # Display Preview: exact pixels captured when they are sent (in memory only),
+        # and the native-resolution GIF currently previewed.
+        self._captured_preview: tuple[int, bytes] | None = None
+        self._preview_key: tuple | None = None
+        self.preview_native: bytes | None = None
+        self.preview_version = dt_util.utcnow()
+        self._clock_tick_unsub = None
         self._state_dirty = False
         self._store: Store = Store(hass, 1, f"{DOMAIN}.{self.mac_address}")
 
@@ -222,6 +234,13 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 self.hass.async_create_task(
                     self.async_set_countdown_timer(saved_timer, sync_now=False)
                 )
+        # The clock preview shows HA's time, so refresh it every minute in clock mode.
+        @callback
+        def _clock_tick(_now) -> None:
+            if self._state.get("current_mode") == "clock":
+                self.hass.async_create_task(self.async_request_refresh())
+
+        self._clock_tick_unsub = async_track_time_change(self.hass, _clock_tick, second=0)
         try:
             await self._ble_connect()
         except Exception as ex:
@@ -320,6 +339,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             await self._store.async_save(
                 {k: self._state[k] for k in _PERSIST_KEYS if k in self._state}
             )
+        await self.async_update_preview()
         return self._state.copy()
 
     async def _async_send_command(self, command_func, *args, **kwargs) -> bool:
@@ -577,17 +597,23 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Display an image from a local file path or http(s) URL."""
         try:
             image_data = await self._fetch_image_data(image_source)
-            is_gif = self._detect_gif(image_data)
-            if not is_gif:
-                image_data = await self.hass.async_add_executor_job(
-                    self._process_static_image, image_data, sharpen
-                )
-            success = await self._upload_image_data(image_data, is_gif)
+            is_gif, upload_data, native = await self.hass.async_add_executor_job(
+                self._adapt_image, image_data, sharpen
+            )
+            if is_gif:
+                # GIF upload uses its own command byte (1) which signals the device
+                # to enter animation mode directly. Calling image.set_mode(EnableDIY)
+                # first puts the device into static-image mode (command 0), which
+                # causes it to ignore the subsequent GIF packets — leaving a black screen.
+                success = await self._async_send_command(self._send_gif_blocks, upload_data)
+            else:
+                success = await self._upload_static_image(upload_data)
         except Exception as ex:
             _LOGGER.warning("Failed to display image %s: %s", image_source, ex)
             return False
         if success:
             self._set_current_mode("image")
+            self._captured_preview = (self._content_generation, native)
             self._state["last_image_kind"] = "file"
             self._state["last_image"] = image_source
             self._fire_event("image_displayed", {"source": image_source})
@@ -600,22 +626,12 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         show_icon_message action); the icon color only applies to MDI icons
         (image files keep their own colors).
         """
-        icon_source = self._state.get("icon_message_icon", "").strip()
         message = self._state.get("icon_message_text", "").strip()
-        if not icon_source or not message:
+        if not self._state.get("icon_message_icon", "").strip() or not message:
             _LOGGER.warning("Icon & Message needs both an icon and a text to display")
             return False
-        text_color = tuple(self._state["icon_message_text_color"])
-        icon_color = tuple(self._state["icon_message_icon_color"])
         try:
-            if icon_source.startswith("mdi:"):
-                icon_data = await self._get_mdi_icon_bytes(icon_source[4:], icon_color)
-            else:
-                icon_data = await self._fetch_image_data(icon_source)
-            gif_data = await self.hass.async_add_executor_job(
-                self._create_icon_message_gif,
-                icon_data, message, self.screen_size_px, text_color, (0, 0, 0),
-            )
+            gif_data = await self._async_build_icon_message_gif()
             # The GIF is already canvas-sized with a tiny palette, so it skips the
             # library's normalisation (which would also cap the animation at 2 s).
             success = await self._async_send_command(self._send_gif_blocks, gif_data)
@@ -624,9 +640,78 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             return False
         if success:
             self._set_current_mode("image")
+            self._captured_preview = (self._content_generation, gif_data)
             self._state["last_image_kind"] = "icon_message"
             self._fire_event("image_displayed", {"message": message})
         return success
+
+    async def _async_build_icon_message_gif(self) -> bytes:
+        """Render the stored Icon & Message settings into the GIF sent to the device."""
+        icon_source = self._state.get("icon_message_icon", "").strip()
+        if icon_source.startswith("mdi:"):
+            icon_data = await self._get_mdi_icon_bytes(
+                icon_source[4:], tuple(self._state["icon_message_icon_color"])
+            )
+        else:
+            icon_data = await self._fetch_image_data(icon_source)
+        return await self.hass.async_add_executor_job(
+            self._create_icon_message_gif,
+            icon_data, self._state.get("icon_message_text", "").strip(), self.screen_size_px,
+            tuple(self._state["icon_message_text_color"]), (0, 0, 0),
+        )
+
+    # Display Preview
+
+    async def async_update_preview(self) -> None:
+        """Re-render the preview if what is on screen may have changed."""
+        mode = self._state.get("current_mode", "clock")
+        now = dt_util.now()
+        key = (
+            self._content_generation,
+            self._state.get("is_on", False),
+            (now.hour, now.minute) if mode == "clock" else None,
+        )
+        if key == self._preview_key:
+            return
+        self._preview_key = key
+        try:
+            native = await self._async_render_preview(mode, now)
+        except Exception as ex:
+            _LOGGER.debug("Preview rendering failed for %s: %s", mode, ex)
+            native = await self.hass.async_add_executor_job(preview.blank_gif, self.screen_size_px)
+        if native != self.preview_native:
+            self.preview_native = native
+            self.preview_version = dt_util.utcnow()
+
+    async def _async_render_preview(self, mode: str, now) -> bytes:
+        """Native-resolution GIF approximating what the display shows right now."""
+        size = self.screen_size_px
+        state = self._state
+        if not state.get("is_on", False):
+            return await self.hass.async_add_executor_job(preview.blank_gif, size)
+        captured = self._captured_preview
+        if captured is not None and captured[0] == self._content_generation:
+            return captured[1]
+        if mode == "image":
+            # Nothing captured yet (e.g. after a restart): rebuild from the stored settings.
+            if state.get("last_image_kind") == "icon_message" and state.get("icon_message_text"):
+                return await self._async_build_icon_message_gif()
+            if state.get("last_image"):
+                image_data = await self._fetch_image_data(state["last_image"])
+                _, _, native = await self.hass.async_add_executor_job(self._adapt_image, image_data, True)
+                return native
+            return await self.hass.async_add_executor_job(preview.blank_gif, size)
+        if mode == "text" and state.get("last_message"):
+            font_path = await self._ensure_text_font()
+            return await self.hass.async_add_executor_job(
+                preview.text_preview_gif, state["last_message"], font_path,
+                state.get("text_font_size", 24), tuple(state.get("text_color", (255, 255, 255))), size,
+            )
+        icon, label, color = preview.fallback_spec(mode, state, now)
+        icon_data = await self._get_mdi_icon_bytes(icon[4:], color)
+        return await self.hass.async_add_executor_job(
+            self._create_icon_message_gif, icon_data, label, size, color, (0, 0, 0)
+        )
 
     async def async_update_icon_message(self, display: bool = False, **settings: str) -> bool:
         """Store Icon & Message settings, then display if asked to or if it is on screen.
@@ -754,24 +839,39 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 return fh.read()
         return await self.hass.async_add_executor_job(_read)
 
-    async def _upload_image_data(self, image_data: bytes, is_gif: bool) -> bool:
-        """Write image bytes to a temp file and upload to the device."""
-        suffix = ".gif" if is_gif else ".png"
+    def _adapt_image(self, image_data: bytes, sharpen: bool) -> tuple[bool, bytes, bytes]:
+        """Prepare image bytes for upload; also return the exact on-screen pixels.
 
+        Returns (is_gif, upload_data, native_preview_gif). GIFs are normalised by the
+        library (canvas size, palette, frame limit) and uploaded as-is; static images
+        are uploaded as processed PNG and the library's own canvas adaptation is
+        repeated here so the preview matches what it sends.
+        """
+        from idotmatrix.modules.image import ImageModule
+        from idotmatrix.util.image_utils import ResizeMode
+
+        size = self.screen_size_px
+        if self._detect_gif(image_data):
+            gif_data = self._client.gif._load_gif_and_adapt_to_canvas(
+                io.BytesIO(image_data), size, ResizeMode.FIT, True, (0, 0, 0), None,
+            )
+            return True, gif_data, gif_data
+        processed = self._process_static_image(image_data, sharpen)
+        rgb = ImageModule._load_image_and_adapt_to_canvas(
+            io.BytesIO(processed), size, ResizeMode.FIT, False, (0, 0, 0)
+        )
+        return False, processed, preview.rgb_to_gif(rgb, size)
+
+    async def _upload_static_image(self, image_data: bytes) -> bool:
+        """Write static image bytes to a temp file and upload them to the device."""
         def _write_temp(data: bytes) -> str:
-            tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+            tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
             tmp.write(data)
             tmp.close()
             return tmp.name
 
         tmp_path = await self.hass.async_add_executor_job(_write_temp, image_data)
         try:
-            if is_gif:
-                # GIF upload uses its own command byte (1) which signals the device
-                # to enter animation mode directly. Calling image.set_mode(EnableDIY)
-                # first puts the device into static-image mode (command 0), which
-                # causes it to ignore the subsequent GIF packets — leaving a black screen.
-                return await self._async_send_command(self._upload_gif_file, tmp_path)
             ok = await self._async_send_command(self._client.image.set_mode)
             if not ok:
                 return False
@@ -780,16 +880,6 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             )
         finally:
             await self.hass.async_add_executor_job(os.unlink, tmp_path)
-
-    async def _upload_gif_file(self, file_path: str) -> None:
-        """Normalise an arbitrary GIF with the library, then upload it block by block."""
-        from idotmatrix.util.image_utils import ResizeMode
-
-        gif_data = await self.hass.async_add_executor_job(
-            self._client.gif._load_gif_and_adapt_to_canvas,
-            file_path, self.screen_size_px, ResizeMode.FIT, True, (0, 0, 0), None,
-        )
-        await self._send_gif_blocks(gif_data)
 
     async def _send_gif_blocks(self, gif_data: bytes) -> None:
         """Upload canvas-sized GIF bytes block by block, waiting for the device's ack after each.
@@ -1147,6 +1237,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
     async def async_shutdown(self) -> None:
         """Disconnect the BLE client cleanly on HA shutdown."""
         self.cancel_pending_restore()
+        if self._clock_tick_unsub is not None:
+            self._clock_tick_unsub()
+            self._clock_tick_unsub = None
         if self._countdown_timer_unsub is not None:
             self._countdown_timer_unsub()
             self._countdown_timer_unsub = None
