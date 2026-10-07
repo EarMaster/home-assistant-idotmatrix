@@ -54,34 +54,7 @@ class IDotMatrixDisplayModeSelect(IDotMatrixEntity, SelectEntity):
         return self.coordinator.data.get("current_mode", "clock")
 
     async def async_select_option(self, option: str) -> None:
-        if option == "clock":
-            style_name = self.coordinator.data.get("clock_style", next(iter(CLOCK_STYLES)))
-            await self.coordinator.async_set_clock_mode(CLOCK_STYLES[style_name])
-        elif option == "text":
-            msg = self.coordinator.data.get("last_message", "")
-            if msg:
-                await self.coordinator.async_display_text(msg)
-        elif option == "effect":
-            effect_name = self.coordinator.data.get("effect_mode", next(iter(EFFECT_TYPES)))
-            await self.coordinator.async_display_effect(EFFECT_TYPES[effect_name])
-        elif option == "image":
-            src = self.coordinator.data.get("last_image", "")
-            has_icon_msg = bool(self.coordinator.data.get("icon_message_text"))
-            prefer_icon_msg = self.coordinator.data.get("last_image_kind") == "icon_message"
-            if has_icon_msg and (prefer_icon_msg or not src):
-                await self.coordinator.async_display_icon_message()
-            elif src:
-                await self.coordinator.async_display_image(src)
-        elif option == "chronograph":
-            await self.coordinator.async_start_chronograph()
-        elif option == "scoreboard":
-            home = self.coordinator.data.get("scoreboard_home", 0)
-            away = self.coordinator.data.get("scoreboard_away", 0)
-            await self.coordinator.async_display_scoreboard(home, away)
-        elif option == "countdown":
-            mins = self.coordinator.data.get("countdown_minutes", 0)
-            secs = self.coordinator.data.get("countdown_seconds", 0)
-            await self.coordinator.async_start_countdown(mins, secs)
+        await self.coordinator.async_activate_mode(option)
         await self.coordinator.async_request_refresh()
 
 

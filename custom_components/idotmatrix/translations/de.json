@@ -1,0 +1,145 @@
+{
+  "config": {
+    "step": {
+      "bluetooth_confirm": {
+        "title": "iDotMatrix-Display gefunden",
+        "description": "Möchtest du {name} zu Home Assistant hinzufügen?"
+      },
+      "discovery": {
+        "title": "Gerät auswählen",
+        "description": "Wähle dein iDotMatrix-Gerät aus der Liste aus oder gib es manuell ein, falls es nicht aufgeführt ist.",
+        "data": {
+          "device": "Gerät auswählen",
+          "manual_entry": "Gerät stattdessen manuell eingeben"
+        }
+      },
+      "manual": {
+        "title": "Gerät manuell hinzufügen",
+        "description": "Gib die Daten deines iDotMatrix-Geräts manuell ein.",
+        "data": {
+          "device_name": "Gerätename",
+          "mac_address": "MAC-Adresse"
+        }
+      },
+      "configure": {
+        "title": "{name} konfigurieren",
+        "description": "Wähle die Pixelauflösung deines iDotMatrix-Displays. Sie steht auf der Rückseite des Geräts oder auf der Verpackung – die meisten IDM-Geräte haben 32×32.",
+        "data": {
+          "screen_size": "Bildschirmgröße"
+        }
+      }
+    },
+    "error": {
+      "no_devices_found": "Keine iDotMatrix-Geräte gefunden. Stelle sicher, dass das Gerät eingeschaltet und im Kopplungsmodus ist.",
+      "scan_failed": "Suche nach Geräten fehlgeschlagen. Prüfe, ob Bluetooth aktiviert ist.",
+      "invalid_mac": "Ungültiges MAC-Adressformat. Verwende das Format XX:XX:XX:XX:XX:XX",
+      "cannot_connect": "Verbindung zum Gerät fehlgeschlagen",
+      "already_configured": "Gerät ist bereits eingerichtet"
+    },
+    "abort": {
+      "already_configured": "Gerät ist bereits eingerichtet",
+      "already_in_progress": "Die Einrichtung läuft bereits"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "iDotMatrix-Optionen",
+        "description": "Optionen für dein iDotMatrix-Gerät festlegen.",
+        "data": {
+          "scan_interval": "Aktualisierungsintervall (Sekunden)"
+        }
+      }
+    }
+  },
+  "services": {
+    "show_icon_message": {
+      "name": "Symbol & Nachricht anzeigen",
+      "description": "Zeigt oben auf dem Display ein Symbol und darunter Text. Passt der Text, steht er still; längerer Text scrollt hin und her. Aktualisiert auch die Symbol-&-Nachricht-Entitäten.",
+      "fields": {
+        "icon": {
+          "name": "Symbol",
+          "description": "Ein MDI-Symbol. In YAML auch ein lokaler Dateipfad (/config/www/icons/home.png) oder eine http(s)-Bild-URL."
+        },
+        "text": {
+          "name": "Text",
+          "description": "Text unter dem Symbol. Unterstützt Templates."
+        },
+        "text_color": {
+          "name": "Textfarbe",
+          "description": "Leer lassen, um die aktuelle Textfarbe zu behalten. In YAML auch [r, g, b] oder ein Farbname (red, green, blue, yellow, cyan, magenta, white, orange, purple, pink)."
+        },
+        "icon_color": {
+          "name": "Symbolfarbe",
+          "description": "Nur für MDI-Symbole. Leer lassen, um die aktuelle Symbolfarbe zu behalten. In YAML auch [r, g, b] oder ein Farbname."
+        },
+        "restore_after": {
+          "name": "Zurückkehren nach",
+          "description": "Nach dieser Zeit zur vorherigen Anzeige zurückkehren. Leer lassen, um dauerhaft anzuzeigen."
+        }
+      }
+    },
+    "show_text": {
+      "name": "Text anzeigen",
+      "description": "Zeigt Lauftext an. Aktualisiert auch die Entität Text: Message.",
+      "fields": {
+        "text": {
+          "name": "Text",
+          "description": "Der anzuzeigende Text. Unterstützt Templates."
+        },
+        "color": {
+          "name": "Farbe",
+          "description": "Leer lassen, um die aktuelle Textfarbe zu behalten. In YAML auch [r, g, b] oder ein Farbname."
+        },
+        "font_size": {
+          "name": "Schriftgröße",
+          "description": "Leer lassen, um die aktuelle Schriftgröße zu behalten."
+        },
+        "speed": {
+          "name": "Geschwindigkeit",
+          "description": "Scrollgeschwindigkeit. Leer lassen, um die aktuelle Geschwindigkeit zu behalten."
+        },
+        "restore_after": {
+          "name": "Zurückkehren nach",
+          "description": "Nach dieser Zeit zur vorherigen Anzeige zurückkehren. Leer lassen, um dauerhaft anzuzeigen."
+        }
+      }
+    },
+    "start_countdown": {
+      "name": "Countdown starten",
+      "description": "Startet den Countdown auf dem Display (bis 59:59).",
+      "fields": {
+        "duration": {
+          "name": "Dauer",
+          "description": "Wie lange heruntergezählt wird, bis 59 Minuten 59 Sekunden."
+        },
+        "restore_after": {
+          "name": "Zurückkehren nach",
+          "description": "So lange nach dem Ende des Countdowns zur vorherigen Anzeige zurückkehren. Leer lassen, um beim Countdown zu bleiben."
+        }
+      }
+    },
+    "set_scoreboard": {
+      "name": "Anzeigetafel setzen",
+      "description": "Zeigt die Anzeigetafel mit beiden Spielständen in einem Update.",
+      "fields": {
+        "home": {
+          "name": "Heim",
+          "description": "Heim-Punktestand (0–999). Leer lassen, um den aktuellen Stand zu behalten."
+        },
+        "away": {
+          "name": "Gast",
+          "description": "Gast-Punktestand (0–999). Leer lassen, um den aktuellen Stand zu behalten."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "no_target_display": {
+      "message": "Im gewählten Ziel wurde kein geladenes iDotMatrix-Display gefunden."
+    },
+    "action_failed": {
+      "message": "{device} konnte nicht aktualisiert werden. Prüfe, ob das Display in Reichweite und verbunden ist."
+    }
+  }
+}

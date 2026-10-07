@@ -51,5 +51,95 @@
         }
       }
     }
+  },
+  "services": {
+    "show_icon_message": {
+      "name": "Show icon & message",
+      "description": "Shows an icon in the top part of the display with text below. Text that fits is shown still; longer text scrolls back and forth. Also updates the Icon & Message entities.",
+      "fields": {
+        "icon": {
+          "name": "Icon",
+          "description": "An MDI icon. In YAML this can also be a local file path (/config/www/icons/home.png) or an http(s) image URL."
+        },
+        "text": {
+          "name": "Text",
+          "description": "Text shown below the icon. Supports templates."
+        },
+        "text_color": {
+          "name": "Text color",
+          "description": "Leave empty to keep the current text color. In YAML also [r, g, b] or a preset name (red, green, blue, yellow, cyan, magenta, white, orange, purple, pink)."
+        },
+        "icon_color": {
+          "name": "Icon color",
+          "description": "MDI icons only. Leave empty to keep the current icon color. In YAML also [r, g, b] or a preset name."
+        },
+        "restore_after": {
+          "name": "Restore after",
+          "description": "Return to what was on screen before after this time. Leave empty to keep showing it."
+        }
+      }
+    },
+    "show_text": {
+      "name": "Show text",
+      "description": "Shows scrolling text. Also updates the Text: Message entity.",
+      "fields": {
+        "text": {
+          "name": "Text",
+          "description": "The text to show. Supports templates."
+        },
+        "color": {
+          "name": "Color",
+          "description": "Leave empty to keep the current text color. In YAML also [r, g, b] or a preset name."
+        },
+        "font_size": {
+          "name": "Font size",
+          "description": "Leave empty to keep the current font size."
+        },
+        "speed": {
+          "name": "Speed",
+          "description": "Scroll speed. Leave empty to keep the current speed."
+        },
+        "restore_after": {
+          "name": "Restore after",
+          "description": "Return to what was on screen before after this time. Leave empty to keep showing it."
+        }
+      }
+    },
+    "start_countdown": {
+      "name": "Start countdown",
+      "description": "Starts the countdown on the display (up to 59:59).",
+      "fields": {
+        "duration": {
+          "name": "Duration",
+          "description": "How long to count down, up to 59 minutes 59 seconds."
+        },
+        "restore_after": {
+          "name": "Restore after",
+          "description": "Return to what was on screen before this long after the countdown has ended. Leave empty to stay on the countdown."
+        }
+      }
+    },
+    "set_scoreboard": {
+      "name": "Set scoreboard",
+      "description": "Shows the scoreboard with both scores in one update.",
+      "fields": {
+        "home": {
+          "name": "Home",
+          "description": "Home score (0–999). Leave empty to keep the current score."
+        },
+        "away": {
+          "name": "Away",
+          "description": "Away score (0–999). Leave empty to keep the current score."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "no_target_display": {
+      "message": "No loaded iDotMatrix display found in the selected target."
+    },
+    "action_failed": {
+      "message": "Failed to update {device}. Check that the display is in range and connected."
+    }
   }
 }

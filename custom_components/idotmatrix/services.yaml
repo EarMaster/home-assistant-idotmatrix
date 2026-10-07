@@ -1,154 +1,108 @@
+# Names and descriptions live in strings.json / translations/*.json ("services").
+
 show_icon_message:
-  name: Show Icon & Message
-  description: >-
-    Show an icon in the top portion of the display with text below. Text that fits
-    is shown still; longer text scrolls back and forth. Also updates the
-    Icon & Message entities.
+  target:
+    device:
+      integration: idotmatrix
+    entity:
+      integration: idotmatrix
   fields:
-    device_id:
-      name: Display
-      description: The iDotMatrix display(s) to show the message on
-      required: true
-      selector:
-        device:
-          integration: idotmatrix
-          multiple: true
     icon:
-      name: Icon
-      description: >-
-        An MDI icon (e.g. mdi:bell). In YAML mode this can also be a local file
-        path (/config/www/icons/home.png) or an http(s) image URL.
       required: true
       example: mdi:bell
       selector:
         icon:
     text:
-      name: Text
-      description: Text shown below the icon. Supports templates.
       required: true
       example: "{{ states('sensor.outside_temperature') }}°C"
       selector:
         text:
     text_color:
-      name: Text color
-      description: >-
-        Any color from the color picker. In YAML, also [r, g, b] or a preset name
-        (red, green, blue, yellow, cyan, magenta, white, orange, purple, pink).
-        Leave empty to keep the current Icon & Message text color.
       example: [255, 165, 0]
       selector:
         color_rgb:
     icon_color:
-      name: Icon color
-      description: >-
-        Icon color (MDI icons only). Any color from the color picker; in YAML also
-        [r, g, b] or a preset name. Leave empty to keep the current Icon & Message
-        icon color.
       example: [255, 0, 0]
       selector:
         color_rgb:
+    restore_after:
+      example: "00:00:30"
+      selector:
+        duration:
 
-display_text:
-  name: Display Text
-  description: Display a text message on the iDotMatrix display
+show_text:
+  target:
+    device:
+      integration: idotmatrix
+    entity:
+      integration: idotmatrix
   fields:
-    message:
-      name: Message
-      description: Text message to display
+    text:
       required: true
+      example: "Dinner is ready"
       selector:
         text:
-    font_size:
-      name: Font Size
-      description: Size of the font
-      default: medium
-      selector:
-        select:
-          options:
-            - small
-            - medium
-            - large
     color:
-      name: Color
-      description: Text color (name or RGB values)
-      default: white
+      example: [0, 255, 255]
       selector:
-        select:
-          options:
-            - red
-            - green
-            - blue
-            - yellow
-            - cyan
-            - magenta
-            - white
-            - orange
-            - purple
-            - pink
+        color_rgb:
+    font_size:
+      example: 24
+      selector:
+        number:
+          min: 8
+          max: 32
+          step: 1
+          unit_of_measurement: px
+          mode: slider
     speed:
-      name: Speed
-      description: Animation speed (1-100)
-      default: 50
+      example: 50
       selector:
         number:
           min: 1
           max: 100
-
-display_image:
-  name: Display Image
-  description: Display an image or GIF on the iDotMatrix display
-  fields:
-    image_path:
-      name: Image Path
-      description: Path to the image file
-      required: true
+          step: 1
+          mode: slider
+    restore_after:
+      example: "00:00:30"
       selector:
-        text:
+        duration:
+
+start_countdown:
+  target:
+    device:
+      integration: idotmatrix
+    entity:
+      integration: idotmatrix
+  fields:
     duration:
-      name: Duration
-      description: How long to display the image (seconds)
-      default: 5
+      required: true
+      example: "00:05:30"
+      selector:
+        duration:
+    restore_after:
+      example: "00:00:10"
+      selector:
+        duration:
+
+set_scoreboard:
+  target:
+    device:
+      integration: idotmatrix
+    entity:
+      integration: idotmatrix
+  fields:
+    home:
+      example: 2
       selector:
         number:
-          min: 1
-          max: 60
-
-set_clock_mode:
-  name: Set Clock Mode
-  description: Set the clock display style
-  fields:
-    clock_style:
-      name: Clock Style
-      description: Style of the clock display
-      required: true
+          min: 0
+          max: 999
+          mode: box
+    away:
+      example: 1
       selector:
-        select:
-          options:
-            - classic
-            - digital
-            - analog
-            - minimal
-            - colorful
-
-display_effect:
-  name: Display Effect
-  description: Display a visual effect on the iDotMatrix display
-  fields:
-    effect_type:
-      name: Effect Type
-      description: Type of visual effect
-      required: true
-      selector:
-        select:
-          options:
-            - rainbow
-            - random_pixels
-            - white
-            - rainbow_vertical
-            - diagonal_right
-            - diagonal_left
-            - random
-
-sync_time:
-  name: Sync Time
-  description: Synchronize the device time with Home Assistant
+        number:
+          min: 0
+          max: 999
+          mode: box

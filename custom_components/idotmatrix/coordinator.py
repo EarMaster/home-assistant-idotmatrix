@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import io
 import logging
 import math
@@ -13,7 +14,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 import homeassistant.util.dt as dt_util
@@ -43,11 +44,23 @@ _PERSIST_KEYS = frozenset({
     "brightness", "screen_flipped",
     "clock_style", "clock_show_date", "clock_hour24", "clock_color",
     "effect_mode",
-    "last_message", "last_image", "last_image_kind",
+    "last_message", "text_color", "text_font_size", "text_speed",
+    "last_image", "last_image_kind",
     "icon_message_icon", "icon_message_text", "icon_message_text_color", "icon_message_icon_color",
     "scoreboard_home", "scoreboard_away",
     "countdown_minutes", "countdown_seconds", "countdown_timer_entity",
 })
+
+
+# Content settings captured before temporary content (restore_after) and put back
+# afterwards, so e.g. a text notification doesn't replace the text that returns.
+_RESTORE_KEYS = (
+    "clock_style", "effect_mode",
+    "last_message", "text_color", "text_font_size", "text_speed",
+    "last_image", "last_image_kind",
+    "icon_message_icon", "icon_message_text", "icon_message_text_color", "icon_message_icon_color",
+    "scoreboard_home", "scoreboard_away", "countdown_minutes", "countdown_seconds",
+)
 
 
 def _parse_timer_remaining(timer_state) -> tuple[int, int] | None:
@@ -122,6 +135,10 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self._notifications: asyncio.Queue[bytes] = asyncio.Queue()
         self._connected = False
         self._countdown_timer_unsub = None
+        # Bumped whenever new content is shown; a scheduled restore only runs if
+        # nothing else was shown since it was scheduled.
+        self._content_generation = 0
+        self._pending_restore: dict[str, Any] | None = None
         self._state_dirty = False
         self._store: Store = Store(hass, 1, f"{DOMAIN}.{self.mac_address}")
 
@@ -136,6 +153,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             "clock_color": "white",
             "effect_mode": _DEFAULT_EFFECT_MODE,
             "last_message": "",
+            "text_color": [255, 255, 255],
+            "text_font_size": 24,
+            "text_speed": 50,
             "last_image": "",
             "icon_message_icon": "mdi:information-outline",
             "icon_message_text": "",
@@ -163,6 +183,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=entry.options.get("scan_interval", DEFAULT_SCAN_INTERVAL)),
         )
@@ -370,16 +391,110 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             self._fire_event("screen_flipped", {"flipped": flipped})
         return success
 
+    # Mode switching and temporary content
+
+    def _set_current_mode(self, mode: str) -> None:
+        """Record that new content of the given mode is on screen."""
+        self._state["current_mode"] = mode
+        self._content_generation += 1
+
+    async def async_activate_mode(self, mode: str) -> bool:
+        """Re-show the last content of a mode (what Display Mode does when selected)."""
+        state = self._state
+        if mode == "clock":
+            return await self.async_set_clock_mode(
+                CLOCK_STYLES[state.get("clock_style", _DEFAULT_CLOCK_STYLE)]
+            )
+        if mode == "text":
+            return bool(state.get("last_message")) and await self.async_display_text(state["last_message"])
+        if mode == "effect":
+            return await self.async_display_effect(
+                EFFECT_TYPES[state.get("effect_mode", _DEFAULT_EFFECT_MODE)]
+            )
+        if mode == "image":
+            src = state.get("last_image", "")
+            has_icon_msg = bool(state.get("icon_message_text"))
+            if has_icon_msg and (state.get("last_image_kind") == "icon_message" or not src):
+                return await self.async_display_icon_message()
+            return bool(src) and await self.async_display_image(src)
+        if mode == "chronograph":
+            return await self.async_start_chronograph()
+        if mode == "scoreboard":
+            return await self.async_display_scoreboard(
+                state.get("scoreboard_home", 0), state.get("scoreboard_away", 0)
+            )
+        if mode == "countdown":
+            return await self.async_start_countdown(
+                state.get("countdown_minutes", 0), state.get("countdown_seconds", 0)
+            )
+        return False
+
+    def snapshot_for_restore(self) -> dict[str, Any]:
+        """Capture what is on screen now, to bring it back after temporary content.
+
+        If temporary content with a pending restore is still showing, its snapshot is
+        reused, so back-to-back notifications all return to the original screen.
+        """
+        pending = self._pending_restore
+        if pending and pending["generation"] == self._content_generation:
+            return pending["snapshot"]
+        return {
+            "mode": self._state.get("current_mode", "clock"),
+            "state": {k: copy.deepcopy(self._state[k]) for k in _RESTORE_KEYS if k in self._state},
+        }
+
+    def schedule_restore(self, snapshot: dict[str, Any], delay: timedelta) -> None:
+        """Restore the snapshot after delay, unless other content is shown meanwhile."""
+        self.cancel_pending_restore()
+        generation = self._content_generation
+
+        @callback
+        def _restore(_now) -> None:
+            self._pending_restore = None
+            if self._content_generation == generation:
+                self.hass.async_create_task(self._async_restore(snapshot))
+
+        self._pending_restore = {
+            "generation": generation,
+            "snapshot": snapshot,
+            "unsub": async_call_later(self.hass, delay, _restore),
+        }
+
+    def cancel_pending_restore(self) -> None:
+        """Drop a scheduled restore (e.g. when a countdown is paused or stopped)."""
+        if self._pending_restore is not None:
+            self._pending_restore["unsub"]()
+            self._pending_restore = None
+
+    async def _async_restore(self, snapshot: dict[str, Any]) -> None:
+        _LOGGER.debug("Restoring %s after temporary content", snapshot["mode"])
+        self._state.update(copy.deepcopy(snapshot["state"]))
+        await self.async_activate_mode(snapshot["mode"])
+        await self.async_request_refresh()
+
     # Text
 
     async def async_display_text(
         self,
         message: str,
-        font_size: int = 24,
-        color: tuple = (255, 255, 255),
-        speed: int = 50,
+        font_size: int | None = None,
+        color: list[int] | None = None,
+        speed: int | None = None,
     ) -> bool:
-        """Display a scrolling text message."""
+        """Display a scrolling text message.
+
+        Settings that are not given use the last ones (set via the show_text action),
+        so Text: Message and Display Mode re-sends look the same as before.
+        """
+        if font_size is not None:
+            self._state["text_font_size"] = font_size
+        if color is not None:
+            self._state["text_color"] = list(color)
+        if speed is not None:
+            self._state["text_speed"] = speed
+        font_size = self._state["text_font_size"]
+        color = tuple(self._state["text_color"])
+        speed = self._state["text_speed"]
         font_path = await self._ensure_text_font()
         success = await self._async_send_command(
             self._client.text.show_text,
@@ -391,7 +506,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         )
         if success:
             self._state["last_message"] = message
-            self._state["current_mode"] = "text"
+            self._set_current_mode("text")
             self._fire_event("text_displayed", {"message": message})
         return success
 
@@ -409,7 +524,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             color=color,
         )
         if success:
-            self._state["current_mode"] = "clock"
+            self._set_current_mode("clock")
             self._state["clock_style"] = _CLOCK_STYLE_BY_ID.get(style, _DEFAULT_CLOCK_STYLE)
             self._fire_event("clock_mode_set", {"style": style})
         return success
@@ -451,7 +566,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             [(255, 0, 0), (0, 255, 0), (0, 0, 255)],
         )
         if success:
-            self._state["current_mode"] = "effect"
+            self._set_current_mode("effect")
             self._state["effect_mode"] = _EFFECT_MODE_BY_ID.get(effect_type, _DEFAULT_EFFECT_MODE)
             self._fire_event("effect_displayed", {"effect_type": effect_type})
         return success
@@ -472,7 +587,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.warning("Failed to display image %s: %s", image_source, ex)
             return False
         if success:
-            self._state["current_mode"] = "image"
+            self._set_current_mode("image")
             self._state["last_image_kind"] = "file"
             self._state["last_image"] = image_source
             self._fire_event("image_displayed", {"source": image_source})
@@ -508,7 +623,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.warning("Failed to display icon+message: %s", ex)
             return False
         if success:
-            self._state["current_mode"] = "image"
+            self._set_current_mode("image")
             self._state["last_image_kind"] = "icon_message"
             self._fire_event("image_displayed", {"message": message})
         return success
@@ -870,7 +985,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             self._client.scoreboard.show, home, away
         )
         if success:
-            self._state["current_mode"] = "scoreboard"
+            self._set_current_mode("scoreboard")
             self._state["scoreboard_home"] = home
             self._state["scoreboard_away"] = away
             self._fire_event("scoreboard_displayed", {"home": home, "away": away})
@@ -884,7 +999,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             self._client.countdown.start, minutes, seconds
         )
         if success:
-            self._state["current_mode"] = "countdown"
+            self._set_current_mode("countdown")
             self._state["countdown_minutes"] = minutes
             self._state["countdown_seconds"] = seconds
             self._fire_event("countdown_started", {"minutes": minutes, "seconds": seconds})
@@ -894,6 +1009,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Pause the running countdown."""
         success = await self._async_send_command(self._client.countdown.pause)
         if success:
+            self.cancel_pending_restore()
             self._fire_event("countdown_paused")
         return success
 
@@ -901,6 +1017,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Stop (disable) the countdown."""
         success = await self._async_send_command(self._client.countdown.stop)
         if success:
+            self.cancel_pending_restore()
             self._fire_event("countdown_stopped")
         return success
 
@@ -908,7 +1025,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Restart the countdown from its original duration."""
         success = await self._async_send_command(self._client.countdown.restart)
         if success:
-            self._state["current_mode"] = "countdown"
+            self._set_current_mode("countdown")
             self._fire_event("countdown_restarted")
         return success
 
@@ -979,7 +1096,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Start the chronograph from zero."""
         success = await self._async_send_command(self._client.chronograph.start_from_zero)
         if success:
-            self._state["current_mode"] = "chronograph"
+            self._set_current_mode("chronograph")
             self._fire_event("chronograph_started")
         return success
 
@@ -1029,6 +1146,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_shutdown(self) -> None:
         """Disconnect the BLE client cleanly on HA shutdown."""
+        self.cancel_pending_restore()
         if self._countdown_timer_unsub is not None:
             self._countdown_timer_unsub()
             self._countdown_timer_unsub = None
