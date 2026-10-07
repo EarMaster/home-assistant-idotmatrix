@@ -103,7 +103,14 @@ Once configured, the integration creates several entities:
 - **Icon & Message: Text Color** / **Icon & Message: Icon Color**: Preset colors used by Icon & Message. The icon color applies to MDI icons only — image files keep their own colors. Changing either re-sends the message if it is currently on screen. Any other color can be set with the `idotmatrix.show_icon_message` action; the select then shows `custom`.
 
 ### Actions
-- **`idotmatrix.show_icon_message`**: Show an icon with text below in one step — the easiest way to use Icon & Message from automations and scripts. The action editor offers an MDI icon picker, the text supports templates, and text/icon colors are optional full-spectrum color pickers (omit them to keep the current colors; in YAML they also accept `[r, g, b]` or a preset name like `orange`). It updates the Icon & Message entities, so they always show what is on screen.
+All actions target a display by device, entity or area, and their editor is translated (English, German).
+
+- **`idotmatrix.show_icon_message`**: Show an icon with text below in one step. MDI icon picker, text with templates, optional full-spectrum text/icon colors (omit them to keep the current colors; in YAML also `[r, g, b]` or a preset name like `orange`). Updates the Icon & Message entities.
+- **`idotmatrix.show_text`**: Show scrolling text with optional color, font size (8–32 px) and speed (1–100) in one call. Text supports templates. The settings are kept, so later **Text: Message** updates look the same.
+- **`idotmatrix.start_countdown`**: Start the countdown with a duration picker (up to 59:59) instead of setting Minutes and Seconds separately.
+- **`idotmatrix.set_scoreboard`**: Set home and/or away score in one display update.
+
+`show_icon_message`, `show_text` and `start_countdown` accept **`restore_after`**: after that time the display returns to what it showed before (e.g. the clock), including that screen's text, colors and scores. For a countdown, the time counts from when the countdown ends. Several notifications in a row all return to the original screen, and anything else you show in the meantime cancels the restore.
 
 ### Number Entities
 - **Scoreboard: Home**: Home team score (0–999). Setting the value immediately sends both scores to the display.
@@ -203,11 +210,13 @@ automation:
         to: "on"
     action:
       - action: idotmatrix.show_icon_message
-        data:
+        target:
           device_id: <your iDotMatrix device id>
+        data:
           icon: mdi:door-open
           text: Front door open
           icon_color: orange
+          restore_after: "00:00:30"
 ```
 
 ### Icon & Message — Temperature Display
@@ -219,8 +228,9 @@ automation:
         entity_id: sensor.living_room_temperature
     action:
       - action: idotmatrix.show_icon_message
-        data:
+        target:
           device_id: <your iDotMatrix device id>
+        data:
           icon: mdi:thermometer
           text: "{{ states('sensor.living_room_temperature') }}°C"
 ```
@@ -269,7 +279,7 @@ This integration uses the [idotmatrix-api-client](https://github.com/markusresse
 
 ### Dependencies
 - `idotmatrix-api-client>=0.1.0` (imported as `idotmatrix`)
-- Home Assistant 2023.1 or later
+- Home Assistant 2024.11 or later
 
 ## Support
 

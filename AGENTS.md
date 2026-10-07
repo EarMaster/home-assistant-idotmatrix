@@ -11,7 +11,7 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 - **Conventional commits** — use `feat:`, `fix:`, `docs:`, `chore:`, `refactor:` prefixes. Group by type; only split if two changes of the same type are logically unrelated.
 - **No PowerShell scripts** — use Bash or Python for any tooling.
 - **Version bumps** — always update both `manifest.json` (`"version"`) and `CHANGELOG.md` together.
-- **Entities first, actions sparingly** — control goes through entities (light, switch, text, select, button). The one exception is `idotmatrix.show_icon_message` (registered in `__init__.py`), added because an MDI icon picker (`selector: icon`) only exists for action fields. Add an action only when an entity can't offer the UI, and never document one in `services.yaml` without a matching `async_register()` (the other entries there are legacy and have no handlers).
+- **Entities first, actions sparingly** — control goes through entities (light, switch, text, select, button). Actions live in `services.py` (`show_icon_message`, `show_text`, `start_countdown`, `set_scoreboard`) and exist only for what entities can't offer: pickers (icon, color, duration), several settings in one call, and `restore_after`. Every action uses a `target:` (device/entity/area — a field named `device_id` would be hidden by the action editor), keeps names/descriptions in `strings.json` + `translations/{en,de}.json` (not in `services.yaml`), and must have a matching `async_register()`.
 - **Entity naming** — display names follow `Mode: Detail` convention so related entities sort together in the UI (e.g. `Clock: Style`, `Effect: Mode`, `Text: Message`, `Image: File`, `Icon & Message: Text`, `Chronograph: Start/Stop/Reset`). Entity IDs are derived from `entity_suffix` and are never renamed.
 - **Entity categories** — settings-style entities carry `_attr_entity_category = EntityCategory.CONFIG` (imported from `homeassistant.const`), which places them in a separate "Configuration" section on the HA device page. Action buttons and the main mode/display controls have no category and appear in "Controls".
 
@@ -27,10 +27,11 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 
 `coordinator.py` — `IDotMatrixDataUpdateCoordinator` is the single source of truth. All platforms read state from it and write through its methods.
 
-- **State dict** (`self._state`): `is_on`, `brightness` (0–255), `screen_flipped`, `current_mode` (`clock`/`text`/`effect`/`image`/`chronograph`/`scoreboard`), `clock_style`, `effect_mode`, `last_message`, `last_image`, `icon_message_icon`, `icon_message_text`, `last_image_kind` (`file`/`icon_message` — which one Display Mode → image re-sends), `icon_message_text_color`, `icon_message_icon_color` (`[r, g, b]` lists; preset names from 1.7.5–1.8.0 are migrated on load), `scoreboard_home` (0–999), `scoreboard_away` (0–999). Platforms read this via `self.coordinator.data`.
+- **State dict** (`self._state`): `is_on`, `brightness` (0–255), `screen_flipped`, `current_mode` (`clock`/`text`/`effect`/`image`/`chronograph`/`scoreboard`), `clock_style`, `effect_mode`, `last_message`, `text_color`/`text_font_size`/`text_speed` (last show_text settings), `last_image`, `icon_message_icon`, `icon_message_text`, `last_image_kind` (`file`/`icon_message` — which one Display Mode → image re-sends), `icon_message_text_color`, `icon_message_icon_color` (`[r, g, b]` lists; preset names from 1.7.5–1.8.0 are migrated on load), `scoreboard_home` (0–999), `scoreboard_away` (0–999). Platforms read this via `self.coordinator.data`.
 - **BLE client**: `IDotMatrixClient(screen_size=ScreenSize[...], mac_address=...)` — persistent connection managed via `bleak-retry-connector`. On successful connect, `is_on` is set to `True` (the device has no readable on/off characteristic; connected = on).
 - **Availability**: `_connected` flag toggled by `_ble_connect()` and the Bleak disconnected callback. Each state change schedules `async_request_refresh()` so entities update immediately. `_async_update_data` returns cached `_state` and retries `_ble_connect()` when not connected.
 - **Command serialisation**: `_async_send_command` acquires an `asyncio.Lock` and `await`s the library call. No connect/disconnect per command — the persistent connection is reused.
+- **Temporary content (`restore_after`)**: every content change goes through `_set_current_mode()`, which bumps `_content_generation`. `snapshot_for_restore()` captures the mode plus `_RESTORE_KEYS`; `schedule_restore()` only fires if the generation is unchanged (nothing else shown meanwhile). A still-pending snapshot is reused, so chained notifications return to the original screen. `async_activate_mode()` re-shows a mode (shared with the Display Mode select).
 - **GIF upload**: `_upload_gif_file` replaces the library's `upload_gif_file`, which sends all 4 KB blocks back to back with no flow control (all writes are forced to write-without-response). It reuses the library's `_load_gif_and_adapt_to_canvas` + `create_gif_data_packets`, sends one block at a time and waits for the device's `05 00 01 00 xx` ack notification on `fa03` (subscribed in `_ble_connect`; 3 s timeout, then continues). Without this, multi-block GIFs freeze on the first frame or are ignored, especially via an ESPHome BT proxy.
 - **Device events**: Methods fire `hass.bus.async_fire(f"{DOMAIN}_{event_type}", ...)` for device triggers (see `device_trigger.py`).
 
@@ -115,7 +116,8 @@ custom_components/idotmatrix/
   select.py            Display Mode (Controls); Clock: Style, Effect: Mode (Configuration section)
   button.py            Chronograph: Start/Stop/Reset (Controls); Freeze Screen, Reset Device, Sync Time (Controls)
   number.py            Scoreboard: Home, Scoreboard: Away (Configuration section)
-  services.yaml        action UI descriptions; only show_icon_message has a handler, the rest are legacy
+  services.py          actions + target resolution + restore_after
+  services.yaml        action fields/selectors (texts are in strings.json / translations)
   strings.json         config flow string keys
   translations/en.json English strings for config/options UI
 test_integration.py    standalone smoke test (mocks HA + library)
