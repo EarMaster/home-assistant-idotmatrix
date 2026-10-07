@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.2] - 2026-10-07
+
+### Added
+- Actions `idotmatrix.show_text` (color, font size, speed), `idotmatrix.start_countdown` (duration picker) and `idotmatrix.set_scoreboard` (both scores in one update)
+- `restore_after` on `show_icon_message`, `show_text` and `start_countdown`: return to the previous screen and its content afterwards
+- German translation; action editor texts are now translatable
+
+### Changed
+- Actions use a target (device, entity or area); the display picker shows in the editor again. `device_id` under `data:` keeps working
+- Removed legacy `services.yaml` entries that had no implementation
+- Requires Home Assistant 2024.11 or later
+
+### Fixed
+- Options dialog (gear button) failing with `500 Internal Server Error` on Home Assistant 2025.12+
+
 ## [1.8.1] - 2026-10-06
 
 ### Added
