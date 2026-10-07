@@ -32,6 +32,7 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 - **Availability**: `_connected` flag toggled by `_ble_connect()` and the Bleak disconnected callback. Each state change schedules `async_request_refresh()` so entities update immediately. `_async_update_data` returns cached `_state` and retries `_ble_connect()` when not connected.
 - **Command serialisation**: `_async_send_command` acquires an `asyncio.Lock` and `await`s the library call. No connect/disconnect per command — the persistent connection is reused.
 - **Temporary content (`restore_after`)**: every content change goes through `_set_current_mode()`, which bumps `_content_generation`. `snapshot_for_restore()` captures the mode plus `_RESTORE_KEYS`; `schedule_restore()` only fires if the generation is unchanged (nothing else shown meanwhile). A still-pending snapshot is reused, so chained notifications return to the original screen. `async_activate_mode()` re-shows a mode (shared with the Display Mode select).
+- **Display Preview** (`image.py`, `preview.py`): the device is write-only, so the preview is derived. Exact pixels are captured at send time into `_captured_preview = (content_generation, native_gif)` (Icon & Message GIF, `_adapt_image()` output for files). `async_update_preview()` runs in `_async_update_data` and re-renders only when `(content_generation, is_on, minute-if-clock)` changes: captured pixels if the generation matches, otherwise rebuilt from state (text via the library's glyph drawing, device-drawn modes via `preview.fallback_spec()` + the Icon & Message renderer). `preview_version` changes only when the bytes change; the entity upscales with NEAREST (~320 px) and caches per version. Per-size reference templates for device-drawn modes are meant to replace `fallback_spec()` later.
 - **GIF upload**: `_upload_gif_file` replaces the library's `upload_gif_file`, which sends all 4 KB blocks back to back with no flow control (all writes are forced to write-without-response). It reuses the library's `_load_gif_and_adapt_to_canvas` + `create_gif_data_packets`, sends one block at a time and waits for the device's `05 00 01 00 xx` ack notification on `fa03` (subscribed in `_ble_connect`; 3 s timeout, then continues). Without this, multi-block GIFs freeze on the first frame or are ignored, especially via an ESPHome BT proxy.
 - **Device events**: Methods fire `hass.bus.async_fire(f"{DOMAIN}_{event_type}", ...)` for device triggers (see `device_trigger.py`).
 
@@ -117,6 +118,8 @@ custom_components/idotmatrix/
   button.py            Chronograph: Start/Stop/Reset (Controls); Freeze Screen, Reset Device, Sync Time (Controls)
   number.py            Scoreboard: Home, Scoreboard: Away (Configuration section)
   services.py          actions + target resolution + restore_after
+  image.py             Display Preview image entity
+  preview.py           preview rendering (upscale, text approximation, fallbacks)
   services.yaml        action fields/selectors (texts are in strings.json / translations)
   strings.json         config flow string keys
   translations/en.json English strings for config/options UI

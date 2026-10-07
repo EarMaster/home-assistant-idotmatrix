@@ -102,6 +102,15 @@ Once configured, the integration creates several entities:
 - **Effect: Mode**: Select visual effects
 - **Icon & Message: Text Color** / **Icon & Message: Icon Color**: Preset colors used by Icon & Message. The icon color applies to MDI icons only — image files keep their own colors. Changing either re-sends the message if it is currently on screen. Any other color can be set with the `idotmatrix.show_icon_message` action; the select then shows `custom`.
 
+### Image Entities
+- **Display Preview**: An (animated) picture of what the display is showing, enlarged with sharp pixels. The display can't be read back, so the preview is built from what Home Assistant sends:
+  - **Exact** for **Image: File** (static images and GIFs) and **Icon & Message**
+  - **Approximate** for scrolling text (same font and glyphs, but the device does the scrolling)
+  - **Labelled placeholder** (icon + current value) for modes the display draws itself: clock (Home Assistant's time, updated every minute), scoreboard, countdown (start value), chronograph and effects
+  - Black when the display is off. Brightness and screen flip are not reflected.
+
+  Tip: in a Picture Entity card, set `aspect_ratio: 1` (or `fit_mode: contain`) so the square preview isn't cropped. Each content change records one state row; exclude the entity from the recorder if you don't want that history.
+
 ### Actions
 All actions target a display by device, entity or area, and their editor is translated (English, German).
 
