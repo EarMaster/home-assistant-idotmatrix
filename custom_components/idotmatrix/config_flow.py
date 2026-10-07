@@ -38,7 +38,7 @@ class IDotMatrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     def async_get_options_flow(config_entry):
         """Create the options flow."""
-        return IDotMatrixOptionsFlowHandler(config_entry)
+        return IDotMatrixOptionsFlowHandler()
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
@@ -205,11 +205,11 @@ class IDotMatrixConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class IDotMatrixOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for iDotMatrix integration."""
+    """Handle options flow for iDotMatrix integration.
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
+    Home Assistant provides self.config_entry (read-only since 2025.12; assigning
+    it raised AttributeError and made the options dialog fail with a 500).
+    """
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
