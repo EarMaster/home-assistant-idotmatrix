@@ -17,7 +17,7 @@ A custom Home Assistant integration for iDotMatrix LED displays that provides de
 - **Chronograph**: Start, stop, and reset stopwatch functionality
 - **Scoreboard**: Display two scores (0–999 each) for home and away teams
 - **Countdown**: Display a countdown timer with start, pause, stop, and restart controls; optionally syncs automatically with a Home Assistant Timer entity
-- **Time Synchronization**: Sync device time with Home Assistant
+- **Time Synchronization**: Sync device time with Home Assistant — automatically on connect, once a day and when the UTC offset changes (daylight saving time)
 
 ## Installation
 
