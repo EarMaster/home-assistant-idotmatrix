@@ -7,7 +7,6 @@ import io
 import logging
 import math
 import os
-import tempfile
 from datetime import timedelta
 from typing import Any
 
@@ -102,18 +101,9 @@ def _parse_timer_remaining(timer_state) -> tuple[int, int] | None:
 
 _MDI_FONT_URL = "https://cdn.jsdelivr.net/npm/@mdi/font@latest/fonts/materialdesignicons-webfont.ttf"
 _MDI_CSS_URL = "https://cdn.jsdelivr.net/npm/@mdi/font@latest/css/materialdesignicons.css"
-# The library's font file is not included in its pip package (fonts/ dir is at repo root,
-# excluded from pyproject.toml).  We download and cache it on first use instead.
-_TEXT_FONT_URL = "https://raw.githubusercontent.com/markusressel/idotmatrix-api-client/main/fonts/Rain-DRM3.otf"
 
-# GIF upload protocol (see https://github.com/8none1/idotmatrix): the payload is sent
-# in 4 KB blocks and the device notifies on fa03 after each one — 05 00 01 00 01 for
-# "block received", 05 00 01 00 03 for "upload complete".
-_UUID_NOTIFY_DATA = "0000fa03-0000-1000-8000-00805f9b34fb"
-_UUID_WRITE_DATA = "0000fa02-0000-1000-8000-00805f9b34fb"
-_GIF_ACK_PREFIX = b"\x05\x00\x01\x00"
-_GIF_ACK_TIMEOUT_S = 3.0
-_GIF_PACKET_DELAY_S = 0.02
+# Spacing of writes that are downgraded to write-without-response (see _create_transport).
+_WRITE_WITHOUT_RESPONSE_DELAY_S = 0.02
 
 # Icon & Message animation: the device handles at most 64 GIF frames.
 _GIF_MAX_FRAMES = 64
@@ -141,8 +131,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self.device_name = entry.data[CONF_NAME]
 
         self._command_lock = asyncio.Lock()
-        self._notifications: asyncio.Queue[bytes] = asyncio.Queue()
         self._connected = False
+        self._transport = None
         self._countdown_timer_unsub = None
         # Bumped whenever new content is shown; a scheduled restore only runs if
         # nothing else was shown since it was scheduled.
@@ -190,6 +180,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         }
 
         from idotmatrix.client import IDotMatrixClient
+        from idotmatrix.connection_manager import ConnectionListener
         from idotmatrix.screensize import ScreenSize
 
         screen_size_key = entry.data.get(CONF_SCREEN_SIZE, DEFAULT_SCREEN_SIZE)
@@ -197,6 +188,12 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self._client = IDotMatrixClient(
             screen_size=ScreenSize[SCREEN_SIZES[screen_size_key]],
             mac_address=self.mac_address,
+            transport_factory=self._create_transport,
+            # Home Assistant handles SIGINT/SIGTERM itself.
+            install_signal_handlers=False,
+        )
+        self._client.add_connection_listener(
+            ConnectionListener(on_connected=None, on_disconnected=self._async_on_disconnected)
         )
 
         super().__init__(
@@ -256,11 +253,39 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 self.mac_address, ex,
             )
 
-    async def _ble_connect(self) -> None:
-        """Connect via HA Bluetooth + bleak-retry-connector and inject client into library."""
-        from homeassistant.components import bluetooth
+    def _create_transport(self, address_or_device, on_disconnected):
+        """Library transport that connects through HA Bluetooth (local adapters and proxies)."""
         from bleak import BleakClient
         from bleak_retry_connector import establish_connection
+        from idotmatrix.const import UUID_CHARACTERISTIC_WRITE_DATA
+        from idotmatrix.transport import BleakTransport
+
+        async def _connector(device, disconnected_callback):
+            return await establish_connection(
+                BleakClient, device, self.mac_address,
+                disconnected_callback=disconnected_callback, max_attempts=3,
+            )
+
+        class _HaTransport(BleakTransport):
+            async def write(self, data, response):
+                # The library writes uploads with response, like the official app. If the
+                # write characteristic only offers write-without-response (seen through an
+                # ESPHome proxy), such writes fail with "Write not permitted" and drop the
+                # connection, so downgrade them and space them out instead.
+                if response:
+                    char = self._client.services.get_characteristic(UUID_CHARACTERISTIC_WRITE_DATA)
+                    if char is not None and "write" not in char.properties:
+                        await super().write(data, response=False)
+                        await asyncio.sleep(_WRITE_WITHOUT_RESPONSE_DELAY_S)
+                        return
+                await super().write(data, response)
+
+        self._transport = _HaTransport(address_or_device, on_disconnected, connector=_connector)
+        return self._transport
+
+    async def _ble_connect(self) -> None:
+        """Connect to the device via the BLEDevice that HA Bluetooth currently knows."""
+        from homeassistant.components import bluetooth
 
         ble_device = bluetooth.async_ble_device_from_address(
             self.hass, self.mac_address, connectable=True
@@ -272,61 +297,32 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 f"Device {self.mac_address} not found in HA Bluetooth scan cache"
             )
 
-        cm = self._client._connection_manager
-        client = await establish_connection(
-            BleakClient,
-            ble_device,
-            self.mac_address,
-            disconnected_callback=self._on_ble_disconnected,
-            max_attempts=3,
-        )
-        # Suppress response reads: the library calls read_gatt_char() after every write
-        # to check for a response, but on this device that characteristic is write-only.
-        # The resulting "Read not permitted" GATT error causes the device to drop the
-        # connection before the library's own error handler can catch it.  The library
-        # ignores the response data anyway, so returning empty bytes is safe.
-        async def _suppress_read(char, *args, **kwargs):
-            return b""
-        client.read_gatt_char = _suppress_read
-
-        # The write characteristic only supports Write Without Response.  The library's
-        # GIF and image upload paths call write_gatt_char(..., response=True) which would
-        # trigger a "Write not permitted" GATT error and drop the connection.  Force every
-        # write to use Write Without Response — the device receives all bytes identically
-        # and the library never inspects the write acknowledgment.
-        _orig_write = client.write_gatt_char
-        async def _write_no_response(*args, response=False, **kwargs):
-            return await _orig_write(*args, response=False, **kwargs)
-        client.write_gatt_char = _write_no_response
-
-        # The device acknowledges each 4 KB GIF block with a notification on fa03.
-        # Without waiting for it, multi-block uploads overrun the device (it shows the
-        # first frame or nothing at all), especially through an ESPHome BT proxy.
-        try:
-            await client.start_notify(_UUID_NOTIFY_DATA, self._on_ble_notification)
-        except Exception as ex:
-            _LOGGER.debug("Could not subscribe to notifications on %s: %s", self.mac_address, ex)
-
-        # Inject the connected client so the library's protocol modules can send data.
-        cm.client = client
-        cm._connected = True
+        self._client.set_ble_device(ble_device)
+        await self._client.connect()
         self._connected = True
         self._state["is_on"] = True
         _LOGGER.info("Device %s connected", self.mac_address)
         self.hass.async_create_task(self.async_request_refresh())
         self.hass.async_create_task(self.async_sync_time())
 
-    def _on_ble_notification(self, _sender, data: bytearray) -> None:
-        """Forward device notifications to whoever is waiting for an upload ack."""
-        _LOGGER.debug("Notification from %s: %s", self.mac_address, bytes(data).hex())
-        self._notifications.put_nowait(bytes(data))
-
-    def _on_ble_disconnected(self, client: "BleakClient") -> None:
-        """Called by Bleak when the device disconnects."""
+    async def _async_on_disconnected(self) -> None:
+        """Called by the library when the connection to the device is lost."""
         if self._connected:
             self._connected = False
             _LOGGER.info("Device %s disconnected", self.mac_address)
-            self.hass.async_create_task(self.async_request_refresh())
+            await self.async_request_refresh()
+
+    def _link_up(self) -> bool:
+        """Whether the BLE link is up, according to the Bluetooth stack."""
+        return self._transport is not None and self._transport.is_connected
+
+    async def _async_reset_connection(self) -> None:
+        """Forget a link that died without a disconnect callback, so the next connect starts fresh."""
+        self._connected = False
+        try:
+            await self._client.disconnect()
+        except Exception as ex:
+            _LOGGER.debug("Error resetting the connection to %s: %s", self.mac_address, ex)
 
     @property
     def connected(self) -> bool:
@@ -359,12 +355,11 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_send_command(self, command_func, *args, **kwargs) -> bool:
         """Execute a device command under the command lock, reconnecting first if needed."""
-        cm = self._client._connection_manager
-        if not self._connected or not (cm.client and cm.client.is_connected):
+        if not self._connected or not self._link_up():
             if self._connected:
-                # BleakClient went stale without firing the disconnect callback
+                # The link went down without firing the disconnect callback
                 _LOGGER.debug("Stale BLE client detected for %s, reconnecting", self.mac_address)
-                self._connected = False
+                await self._async_reset_connection()
             else:
                 _LOGGER.debug("Not connected to %s, attempting reconnect before command", self.mac_address)
             try:
@@ -381,8 +376,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 # Only mark as disconnected if the BLE client is actually gone;
                 # non-BLE errors (e.g. PIL OSError for a missing font file) must
                 # not trigger a spurious disconnect/reconnect cycle.
-                if self._connected and not (cm.client and cm.client.is_connected):
-                    self._connected = False
+                if self._connected and not self._link_up():
+                    await self._async_reset_connection()
                     self.hass.async_create_task(self.async_request_refresh())
                 return False
 
@@ -530,7 +525,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         font_size = self._state["text_font_size"]
         color = tuple(self._state["text_color"])
         speed = self._state["text_speed"]
-        font_path = await self._ensure_text_font()
+        font_path = self._text_font_path()
         success = await self._async_send_command(
             self._client.text.show_text,
             message,
@@ -722,7 +717,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 return native
             return await self.hass.async_add_executor_job(preview.blank_gif, size)
         if mode == "text" and state.get("last_message"):
-            font_path = await self._ensure_text_font()
+            font_path = self._text_font_path()
             return await self.hass.async_add_executor_job(
                 preview.text_preview_gif, state["last_message"], font_path,
                 state.get("text_font_size", 24), tuple(state.get("text_color", (255, 255, 255))), size,
@@ -832,19 +827,12 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         img.save(out, format="PNG")
         return out.getvalue()
 
-    async def _ensure_text_font(self) -> str:
-        """Return the path to the text font, downloading and caching it on first use."""
-        font_path = self.hass.config.path(".storage/idotmatrix_text_font.otf")
-        exists = await self.hass.async_add_executor_job(os.path.exists, font_path)
-        if not exists:
-            _LOGGER.info("Downloading idotmatrix text font from library repo")
-            font_data = await self._fetch_image_data(_TEXT_FONT_URL)
-            def _write(data: bytes) -> None:
-                os.makedirs(os.path.dirname(font_path), exist_ok=True)
-                with open(font_path, "wb") as fh:
-                    fh.write(data)
-            await self.hass.async_add_executor_job(_write, font_data)
-        return font_path
+    @staticmethod
+    def _text_font_path() -> str:
+        """Return the path to the text font that ships with the library."""
+        import idotmatrix
+
+        return os.path.join(os.path.dirname(idotmatrix.__file__), "fonts", "Rain-DRM3.otf")
 
     async def _fetch_image_data(self, source: str) -> bytes:
         """Return raw bytes from a local file path or http(s) URL."""
@@ -883,61 +871,28 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         return False, processed, preview.rgb_to_gif(rgb, size)
 
     async def _upload_static_image(self, image_data: bytes) -> bool:
-        """Write static image bytes to a temp file and upload them to the device."""
-        def _write_temp(data: bytes) -> str:
-            tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-            tmp.write(data)
-            tmp.close()
-            return tmp.name
-
-        tmp_path = await self.hass.async_add_executor_job(_write_temp, image_data)
-        try:
-            ok = await self._async_send_command(self._client.image.set_mode)
-            if not ok:
-                return False
-            return await self._async_send_command(
-                self._client.image.upload_image_file, tmp_path
-            )
-        finally:
-            await self.hass.async_add_executor_job(os.unlink, tmp_path)
-
-    async def _send_gif_blocks(self, gif_data: bytes) -> None:
-        """Upload canvas-sized GIF bytes block by block, waiting for the device's ack after each.
-
-        Replaces the library's upload_gif_file(), which sends every block back to back
-        without flow control. Reuses the library's packet builder.
-        """
-        # gif_type 12 = no time signature, same as the library's upload_gif_file()
-        blocks = self._client.gif.create_gif_data_packets(gif_data, gif_type=12, time_sign=1)
-        client = self._client._connection_manager.client
-        _LOGGER.debug(
-            "Uploading GIF to %s: %d bytes in %d block(s)", self.mac_address, len(gif_data), len(blocks)
+        """Upload static image bytes to the device."""
+        ok = await self._async_send_command(self._client.image.set_mode)
+        if not ok:
+            return False
+        return await self._async_send_command(
+            self._client.image.upload_image_file, io.BytesIO(image_data)
         )
 
-        while not self._notifications.empty():
-            self._notifications.get_nowait()
+    async def _send_gif_blocks(self, gif_data: bytes) -> None:
+        """Upload canvas-sized GIF bytes as they are and show them right away.
 
-        for index, block in enumerate(blocks, start=1):
-            for packet in block:
-                await client.write_gatt_char(_UUID_WRITE_DATA, packet, response=False)
-                await asyncio.sleep(_GIF_PACKET_DELAY_S)
-            ack = await self._wait_for_gif_ack()
-            _LOGGER.debug(
-                "GIF block %d/%d sent, ack: %s", index, len(blocks), ack.hex() if ack else "timeout"
-            )
+        Like the library's upload_gif_file(), minus its conversion: the GIF is already
+        normalised (or rendered for the canvas), and the preview captures exactly these
+        bytes. The device acknowledges every 4 KB block before the next one is sent.
+        """
+        from idotmatrix.util.device_material import INDEX_SHOW_NOW
 
-    async def _wait_for_gif_ack(self) -> bytes | None:
-        """Wait for the device's block ack; return None on timeout (upload continues)."""
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + _GIF_ACK_TIMEOUT_S
-        while (remaining := deadline - loop.time()) > 0:
-            try:
-                data = await asyncio.wait_for(self._notifications.get(), remaining)
-            except asyncio.TimeoutError:
-                return None
-            if data.startswith(_GIF_ACK_PREFIX):
-                return data
-        return None
+        packets = self._client.gif.create_gif_data_packets(gif_data, gif_type=INDEX_SHOW_NOW, time_sign=0)
+        _LOGGER.debug(
+            "Uploading GIF to %s: %d bytes in %d block(s)", self.mac_address, len(gif_data), len(packets)
+        )
+        await self._client._connection_manager.send_packets(packets, response=True, wait_for_ack=True)
 
     @staticmethod
     def _detect_gif(image_data: bytes) -> bool:
@@ -1264,9 +1219,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             self._countdown_timer_unsub()
             self._countdown_timer_unsub = None
         _LOGGER.info("Shutting down iDotMatrix coordinator for %s", self.mac_address)
-        cm = self._client._connection_manager
-        if cm.client is not None and cm.client.is_connected:
-            try:
-                await cm.client.disconnect()
-            except Exception as ex:
-                _LOGGER.debug("Error during shutdown disconnect: %s", ex)
+        self._connected = False
+        try:
+            await self._client.disconnect()
+        except Exception as ex:
+            _LOGGER.debug("Error during shutdown disconnect: %s", ex)

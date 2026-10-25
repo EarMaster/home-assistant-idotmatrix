@@ -10,7 +10,7 @@
   "integration_type": "device",
   "iot_class": "local_polling",
   "requirements": [
-    "idotmatrix-api-client @ git+https://github.com/markusressel/idotmatrix-api-client.git@8927d0f90ceecfeb2097fa15a06a7a9ff2960d28"
+    "idotmatrix-api-client==0.3.0"
   ],
   "version": "1.8.4",
   "icon": "mdi:led-strip",

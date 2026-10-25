@@ -288,7 +288,7 @@ This integration uses the [idotmatrix-api-client](https://github.com/markusresse
 
 ### Dependencies
 - `idotmatrix-api-client>=0.1.0` (imported as `idotmatrix`)
-- Home Assistant 2024.11 or later
+- Home Assistant 2026.5 or later
 
 ## Support
 
