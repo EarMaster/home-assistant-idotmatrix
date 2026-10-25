@@ -27,6 +27,10 @@ jobs:
           VERSION_WITHOUT_V="${VERSION#v}"
           # Extract the block between this version's header and the next one
           awk "/^## \[${VERSION_WITHOUT_V}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md > release_notes.md
+          # Pre-releases (e.g. v1.9.0-beta.1) have no CHANGELOG entry of their own
+          if [ ! -s release_notes.md ]; then
+            echo "Pre-release for testing. Enable \"Show beta versions\" for this repository in HACS to install it." > release_notes.md
+          fi
           cat release_notes.md
 
       - name: Create release directory
@@ -50,7 +54,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create ${{ steps.get_version.outputs.version }} \
+          VERSION="${{ steps.get_version.outputs.version }}"
+          PRERELEASE=""
+          if [[ "$VERSION" == *-* ]]; then PRERELEASE="--prerelease"; fi
+          gh release create "$VERSION" $PRERELEASE \
             --title "iDotMatrix Display" \
             --notes-file release_notes.md \
             idotmatrix-${{ steps.get_version.outputs.version }}.zip
