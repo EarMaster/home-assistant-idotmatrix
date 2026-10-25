@@ -124,6 +124,10 @@ _TEXT_GLYPH_GAP_PX = 1
 _TEXT_SPACE_PX = 3
 _SCROLL_PADDING_PX = 2
 
+# The device clock drifts and does not know about DST, so it is re-synced daily
+# and whenever Home Assistant's UTC offset changes.
+_TIME_RESYNC_INTERVAL = timedelta(hours=24)
+
 
 class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
     """Manage data updates for an iDotMatrix device."""
@@ -151,6 +155,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self.preview_native: bytes | None = None
         self.preview_version = dt_util.utcnow()
         self._clock_tick_unsub = None
+        # UTC offset and time of the last successful time sync.
+        self._time_synced_offset: timedelta | None = None
+        self._time_synced_at = None
         self._state_dirty = False
         self._store: Store = Store(hass, 1, f"{DOMAIN}.{self.mac_address}")
 
@@ -334,6 +341,14 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 await self._ble_connect()
             except Exception as ex:
                 _LOGGER.debug("Reconnect attempt failed for %s: %s", self.mac_address, ex)
+        elif self._time_synced_at is not None:
+            now = dt_util.now()
+            if (
+                now.utcoffset() != self._time_synced_offset
+                or now - self._time_synced_at >= _TIME_RESYNC_INTERVAL
+            ):
+                _LOGGER.debug("Re-syncing time on %s", self.mac_address)
+                await self.async_sync_time()
         if self._state_dirty:
             self._state_dirty = False
             await self._store.async_save(
@@ -572,9 +587,14 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_sync_time(self) -> bool:
         """Synchronize device time with Home Assistant."""
-        return await self._async_send_command(
-            self._client.common.set_time, dt_util.now().replace(tzinfo=None)
+        now = dt_util.now()
+        success = await self._async_send_command(
+            self._client.common.set_time, now.replace(tzinfo=None)
         )
+        if success:
+            self._time_synced_offset = now.utcoffset()
+            self._time_synced_at = now
+        return success
 
     # Effects
 
