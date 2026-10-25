@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.4] - 2026-10-25
+
+### Fixed
+- No command reached the display after a Home Assistant restart since 2026-10-23 ("'NoneType' object has no attribute 'services'"): the iDotMatrix library is now pinned to a tested version instead of following its main branch
+- The device clock is re-synced when Home Assistant's UTC offset changes (daylight saving time) and once a day, not only on connect
+
 ## [1.8.3] - 2026-10-08
 
 ### Added
