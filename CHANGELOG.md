@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-10-31
+
+### Added
+- LaMetric icons as `lam:<id>` (e.g. `lam:18391`) for Image: File and the Icon & Message icon: downloaded and cached on first use, enlarged with sharp pixels, animations kept
+- Animated icons (LaMetric or GIF) keep animating in Icon & Message; icon and scrolling text loop together so neither jumps when the GIF restarts
+
 ## [1.9.0] - 2026-10-25
 
 ### Changed
