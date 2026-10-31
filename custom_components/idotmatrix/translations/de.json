@@ -130,6 +130,90 @@
         "away": {
           "name": "Gast",
           "description": "Gast-Punktestand (0–999). Leer lassen, um den aktuellen Stand zu behalten."
+        },
+        "restore_after": {
+          "name": "Zurückkehren nach",
+          "description": "Nach dieser Zeit zur vorherigen Anzeige zurückkehren. Leer lassen, um dauerhaft anzuzeigen."
+        }
+      }
+    },
+    "show_clock": {
+      "name": "Uhr anzeigen",
+      "description": "Zeigt die Uhr an. Aktualisiert auch die Uhr-Entitäten.",
+      "fields": {
+        "style": {
+          "name": "Stil",
+          "description": "Leer lassen, um den aktuellen Stil zu behalten."
+        },
+        "color": {
+          "name": "Farbe",
+          "description": "Leer lassen, um die aktuelle Uhrfarbe zu behalten. In YAML auch [r, g, b] oder ein Farbname."
+        },
+        "show_date": {
+          "name": "Datum anzeigen",
+          "description": "Leer lassen, um die aktuelle Einstellung zu behalten."
+        },
+        "hour24": {
+          "name": "24-Stunden-Format",
+          "description": "Leer lassen, um die aktuelle Einstellung zu behalten."
+        },
+        "restore_after": {
+          "name": "Zurückkehren nach",
+          "description": "Nach dieser Zeit zur vorherigen Anzeige zurückkehren. Leer lassen, um dauerhaft anzuzeigen."
+        }
+      }
+    },
+    "show_effect": {
+      "name": "Effekt anzeigen",
+      "description": "Zeigt einen animierten Effekt in deinen Farben. Aktualisiert auch die Entität Effect: Mode.",
+      "fields": {
+        "effect": {
+          "name": "Effekt",
+          "description": "Leer lassen, um den aktuellen Effekt zu behalten."
+        },
+        "color_1": {
+          "name": "Farbe 1",
+          "description": "Farben des Effekts (bis zu 4). Alle leer lassen, um die aktuellen Farben zu behalten. In YAML auch [r, g, b] oder ein Farbname."
+        },
+        "color_2": {
+          "name": "Farbe 2",
+          "description": "Optional."
+        },
+        "color_3": {
+          "name": "Farbe 3",
+          "description": "Optional."
+        },
+        "color_4": {
+          "name": "Farbe 4",
+          "description": "Optional."
+        },
+        "restore_after": {
+          "name": "Zurückkehren nach",
+          "description": "Nach dieser Zeit zur vorherigen Anzeige zurückkehren. Leer lassen, um dauerhaft anzuzeigen."
+        }
+      }
+    },
+    "show_image": {
+      "name": "Bild anzeigen",
+      "description": "Zeigt ein Bild oder animiertes GIF im Vollbild. Aktualisiert auch die Entität Image: File.",
+      "fields": {
+        "image": {
+          "name": "Bild",
+          "description": "Ein LaMetric-Symbol (lam:18391), ein lokaler Dateipfad (/config/www/images/door.gif) oder eine http(s)-URL. PNG, JPEG, BMP, WebP und GIF."
+        },
+        "restore_after": {
+          "name": "Zurückkehren nach",
+          "description": "Nach dieser Zeit zur vorherigen Anzeige zurückkehren. Leer lassen, um dauerhaft anzuzeigen."
+        }
+      }
+    },
+    "start_chronograph": {
+      "name": "Stoppuhr starten",
+      "description": "Startet die Stoppuhr bei null.",
+      "fields": {
+        "restore_after": {
+          "name": "Zurückkehren nach",
+          "description": "Nach dieser Zeit zur vorherigen Anzeige zurückkehren. Leer lassen, um dauerhaft anzuzeigen."
         }
       }
     }

@@ -106,3 +106,113 @@ set_scoreboard:
           min: 0
           max: 999
           mode: box
+    restore_after:
+      example: "00:00:30"
+      selector:
+        duration:
+
+show_clock:
+  target:
+    device:
+      integration: idotmatrix
+    entity:
+      integration: idotmatrix
+  fields:
+    style:
+      example: "Color"
+      selector:
+        select:
+          options:
+            - "RGB Swipe Outline"
+            - "Christmas Tree"
+            - "Checkers"
+            - "Color"
+            - "Hourglass"
+            - "Alarm Clock"
+            - "Outlines"
+            - "RGB Corners"
+    color:
+      example: [255, 165, 0]
+      selector:
+        color_rgb:
+    show_date:
+      example: true
+      selector:
+        boolean:
+    hour24:
+      example: true
+      selector:
+        boolean:
+    restore_after:
+      example: "00:00:30"
+      selector:
+        duration:
+
+show_effect:
+  target:
+    device:
+      integration: idotmatrix
+    entity:
+      integration: idotmatrix
+  fields:
+    effect:
+      example: "Vertical Rainbow"
+      selector:
+        select:
+          options:
+            - "Horizontal Rainbow"
+            - "Random Colored Pixels"
+            - "White on Changing BG"
+            - "Vertical Rainbow"
+            - "Diagonal Right Rainbow"
+            - "Diagonal Left Rainbow"
+            - "Random Colored"
+    color_1:
+      example: [255, 0, 0]
+      selector:
+        color_rgb:
+    color_2:
+      example: [0, 0, 255]
+      selector:
+        color_rgb:
+    color_3:
+      example: [255, 255, 0]
+      selector:
+        color_rgb:
+    color_4:
+      example: [0, 255, 0]
+      selector:
+        color_rgb:
+    restore_after:
+      example: "00:00:30"
+      selector:
+        duration:
+
+show_image:
+  target:
+    device:
+      integration: idotmatrix
+    entity:
+      integration: idotmatrix
+  fields:
+    image:
+      required: true
+      example: "lam:18391"
+      selector:
+        text:
+    restore_after:
+      example: "00:00:30"
+      selector:
+        duration:
+
+start_chronograph:
+  target:
+    device:
+      integration: idotmatrix
+    entity:
+      integration: idotmatrix
+  fields:
+    restore_after:
+      example: "00:00:30"
+      selector:
+        duration:

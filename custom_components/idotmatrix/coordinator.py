@@ -39,6 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 
 _DEFAULT_CLOCK_STYLE = next(iter(CLOCK_STYLES))
 _DEFAULT_EFFECT_MODE = next(iter(EFFECT_TYPES))
+_DEFAULT_EFFECT_COLORS = ((255, 0, 0), (0, 255, 0), (0, 0, 255))
 _CLOCK_STYLE_BY_ID = {v: k for k, v in CLOCK_STYLES.items()}
 _EFFECT_MODE_BY_ID = {v: k for k, v in EFFECT_TYPES.items()}
 
@@ -47,7 +48,7 @@ _PERSIST_KEYS = frozenset({
     "current_mode",
     "brightness", "screen_flipped",
     "clock_style", "clock_show_date", "clock_hour24", "clock_color",
-    "effect_mode",
+    "effect_mode", "effect_colors",
     "last_message", "text_color", "text_font_size", "text_speed",
     "last_image", "last_image_kind",
     "icon_message_icon", "icon_message_text", "icon_message_text_color", "icon_message_icon_color",
@@ -59,7 +60,8 @@ _PERSIST_KEYS = frozenset({
 # Content settings captured before temporary content (restore_after) and put back
 # afterwards, so e.g. a text notification doesn't replace the text that returns.
 _RESTORE_KEYS = (
-    "clock_style", "effect_mode",
+    "clock_style", "clock_show_date", "clock_hour24", "clock_color",
+    "effect_mode", "effect_colors",
     "last_message", "text_color", "text_font_size", "text_speed",
     "last_image", "last_image_kind",
     "icon_message_icon", "icon_message_text", "icon_message_text_color", "icon_message_icon_color",
@@ -163,8 +165,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             "clock_style": _DEFAULT_CLOCK_STYLE,
             "clock_show_date": True,
             "clock_hour24": True,
-            "clock_color": "white",
+            "clock_color": [255, 255, 255],
             "effect_mode": _DEFAULT_EFFECT_MODE,
+            "effect_colors": [list(c) for c in _DEFAULT_EFFECT_COLORS],
             "last_message": "",
             "text_color": [255, 255, 255],
             "text_font_size": 24,
@@ -231,8 +234,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 icon_source, _, message = legacy.partition("|")
                 self._state["icon_message_icon"] = icon_source.strip()
                 self._state["icon_message_text"] = message.strip()
-            # 1.7.5–1.8.0 stored Icon & Message colors as preset names.
-            for key in ("icon_message_text_color", "icon_message_icon_color"):
+            # 1.7.5–1.8.0 stored Icon & Message colors as preset names, and up to
+            # 1.9.3 the clock color too.
+            for key in ("icon_message_text_color", "icon_message_icon_color", "clock_color"):
                 if isinstance(self._state[key], str):
                     self._state[key] = list(COLOR_PRESETS.get(self._state[key], (255, 255, 255)))
             saved_timer = stored.get("countdown_timer_entity", "")
@@ -546,11 +550,29 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
     # Clock
 
+    async def async_show_clock(
+        self,
+        style: int | None = None,
+        show_date: bool | None = None,
+        hour24: bool | None = None,
+        color: list[int] | None = None,
+    ) -> bool:
+        """Store the given clock settings, then show the clock with all stored settings."""
+        if show_date is not None:
+            self._state["clock_show_date"] = show_date
+        if hour24 is not None:
+            self._state["clock_hour24"] = hour24
+        if color is not None:
+            self._state["clock_color"] = list(color)
+        if style is None:
+            style = CLOCK_STYLES[self._state.get("clock_style", _DEFAULT_CLOCK_STYLE)]
+        return await self.async_set_clock_mode(style)
+
     async def async_set_clock_mode(self, style: int) -> bool:
         """Set clock display style, passing the stored show_date/hour24/color settings."""
         show_date = self._state.get("clock_show_date", True)
         hour24 = self._state.get("clock_hour24", True)
-        color = COLOR_PRESETS.get(self._state.get("clock_color", "white"), (255, 255, 255))
+        color = tuple(self._state.get("clock_color", (255, 255, 255)))
         success = await self._async_send_command(
             self._client.clock.show, style,
             show_date=show_date,
@@ -565,24 +587,15 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_set_clock_show_date(self, show_date: bool) -> bool:
         """Toggle date display on the clock and re-send."""
-        self._state["clock_show_date"] = show_date
-        return await self.async_set_clock_mode(
-            CLOCK_STYLES[self._state.get("clock_style", _DEFAULT_CLOCK_STYLE)]
-        )
+        return await self.async_show_clock(show_date=show_date)
 
     async def async_set_clock_hour24(self, hour24: bool) -> bool:
         """Toggle 24-hour format on the clock and re-send."""
-        self._state["clock_hour24"] = hour24
-        return await self.async_set_clock_mode(
-            CLOCK_STYLES[self._state.get("clock_style", _DEFAULT_CLOCK_STYLE)]
-        )
+        return await self.async_show_clock(hour24=hour24)
 
-    async def async_set_clock_color(self, color_name: str) -> bool:
-        """Change the clock color and re-send."""
-        self._state["clock_color"] = color_name
-        return await self.async_set_clock_mode(
-            CLOCK_STYLES[self._state.get("clock_style", _DEFAULT_CLOCK_STYLE)]
-        )
+    async def async_set_clock_color(self, color: list[int]) -> bool:
+        """Change the clock color ([r, g, b]) and re-send."""
+        return await self.async_show_clock(color=color)
 
     async def async_sync_time(self) -> bool:
         """Synchronize device time with Home Assistant."""
@@ -597,12 +610,14 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
     # Effects
 
-    async def async_display_effect(self, effect_type: int) -> bool:
-        """Display a visual effect."""
+    async def async_display_effect(self, effect_type: int, colors: list[list[int]] | None = None) -> bool:
+        """Display a visual effect in the given colors (2–7 [r, g, b]), else the stored ones."""
+        if colors is not None:
+            self._state["effect_colors"] = [list(c) for c in colors]
         success = await self._async_send_command(
             self._client.effect.show,
             effect_type,
-            [(255, 0, 0), (0, 255, 0), (0, 0, 255)],
+            [tuple(c) for c in self._state.get("effect_colors", _DEFAULT_EFFECT_COLORS)],
         )
         if success:
             self._set_current_mode("effect")

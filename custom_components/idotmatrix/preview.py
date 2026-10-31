@@ -13,7 +13,6 @@ import math
 from datetime import datetime
 from typing import Any
 
-from .const import COLOR_PRESETS
 
 PREVIEW_TARGET_PX = 320  # upscaled output size (approx.; 16/32/64 px → ×20/×10/×5)
 _GIF_MAX_FRAMES = 64
@@ -121,7 +120,7 @@ def fallback_spec(mode: str, state: dict[str, Any], now: datetime) -> tuple[str,
             label = f"{now.hour:02d}:{now.minute:02d}"
         else:
             label = f"{(now.hour % 12) or 12}:{now.minute:02d}"
-        color = COLOR_PRESETS.get(state.get("clock_color", "white"), _WHITE)
+        color = tuple(state.get("clock_color", _WHITE))
         return "mdi:clock-outline", label, color
     if mode == "scoreboard":
         return "mdi:scoreboard", f"{state.get('scoreboard_home', 0)}:{state.get('scoreboard_away', 0)}", _WHITE

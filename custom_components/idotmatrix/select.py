@@ -89,14 +89,18 @@ class IDotMatrixClockColorSelect(IDotMatrixEntity, SelectEntity):
         self._attr_entity_category = EntityCategory.CONFIG
         self._attr_name = "Clock: Color"
         self._attr_icon = "mdi:palette"
-        self._attr_options = list(COLOR_PRESETS.keys())
+        # "custom" is shown when the show_clock action set a non-preset color.
+        self._attr_options = [*COLOR_PRESETS, _CUSTOM_COLOR]
 
     @property
     def current_option(self) -> str | None:
-        return self.coordinator.data.get("clock_color", "white")
+        rgb = tuple(self.coordinator.data.get("clock_color", (255, 255, 255)))
+        return next((name for name, preset in COLOR_PRESETS.items() if preset == rgb), _CUSTOM_COLOR)
 
     async def async_select_option(self, option: str) -> None:
-        await self.coordinator.async_set_clock_color(option)
+        if option == _CUSTOM_COLOR:
+            return  # keep the current custom color; set new ones via the action
+        await self.coordinator.async_set_clock_color(list(COLOR_PRESETS[option]))
         await self.coordinator.async_request_refresh()
 
 

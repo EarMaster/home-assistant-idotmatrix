@@ -130,6 +130,90 @@
         "away": {
           "name": "Away",
           "description": "Away score (0–999). Leave empty to keep the current score."
+        },
+        "restore_after": {
+          "name": "Restore after",
+          "description": "Return to what was on screen before after this time. Leave empty to keep showing it."
+        }
+      }
+    },
+    "show_clock": {
+      "name": "Show clock",
+      "description": "Shows the clock. Also updates the Clock entities.",
+      "fields": {
+        "style": {
+          "name": "Style",
+          "description": "Leave empty to keep the current style."
+        },
+        "color": {
+          "name": "Color",
+          "description": "Leave empty to keep the current clock color. In YAML also [r, g, b] or a preset name."
+        },
+        "show_date": {
+          "name": "Show date",
+          "description": "Leave empty to keep the current setting."
+        },
+        "hour24": {
+          "name": "24-hour format",
+          "description": "Leave empty to keep the current setting."
+        },
+        "restore_after": {
+          "name": "Restore after",
+          "description": "Return to what was on screen before after this time. Leave empty to keep showing it."
+        }
+      }
+    },
+    "show_effect": {
+      "name": "Show effect",
+      "description": "Shows an animated effect in your colors. Also updates the Effect: Mode entity.",
+      "fields": {
+        "effect": {
+          "name": "Effect",
+          "description": "Leave empty to keep the current effect."
+        },
+        "color_1": {
+          "name": "Color 1",
+          "description": "Colors of the effect (up to 4). Leave all empty to keep the current colors. In YAML also [r, g, b] or a preset name."
+        },
+        "color_2": {
+          "name": "Color 2",
+          "description": "Optional."
+        },
+        "color_3": {
+          "name": "Color 3",
+          "description": "Optional."
+        },
+        "color_4": {
+          "name": "Color 4",
+          "description": "Optional."
+        },
+        "restore_after": {
+          "name": "Restore after",
+          "description": "Return to what was on screen before after this time. Leave empty to keep showing it."
+        }
+      }
+    },
+    "show_image": {
+      "name": "Show image",
+      "description": "Shows an image or animated GIF full screen. Also updates the Image: File entity.",
+      "fields": {
+        "image": {
+          "name": "Image",
+          "description": "A LaMetric icon (lam:18391), a local file path (/config/www/images/door.gif) or an http(s) URL. PNG, JPEG, BMP, WebP and GIF."
+        },
+        "restore_after": {
+          "name": "Restore after",
+          "description": "Return to what was on screen before after this time. Leave empty to keep showing it."
+        }
+      }
+    },
+    "start_chronograph": {
+      "name": "Start chronograph",
+      "description": "Starts the stopwatch from zero.",
+      "fields": {
+        "restore_after": {
+          "name": "Restore after",
+          "description": "Return to what was on screen before after this time. Leave empty to keep showing it."
         }
       }
     }

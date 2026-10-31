@@ -19,16 +19,24 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
-from .const import COLOR_PRESETS, DOMAIN
+from .const import CLOCK_STYLES, COLOR_PRESETS, DOMAIN, EFFECT_TYPES
 from .coordinator import IDotMatrixDataUpdateCoordinator
 
 SERVICE_SHOW_ICON_MESSAGE = "show_icon_message"
 SERVICE_SHOW_TEXT = "show_text"
 SERVICE_START_COUNTDOWN = "start_countdown"
 SERVICE_SET_SCOREBOARD = "set_scoreboard"
-SERVICES = (SERVICE_SHOW_ICON_MESSAGE, SERVICE_SHOW_TEXT, SERVICE_START_COUNTDOWN, SERVICE_SET_SCOREBOARD)
+SERVICE_SHOW_CLOCK = "show_clock"
+SERVICE_SHOW_EFFECT = "show_effect"
+SERVICE_SHOW_IMAGE = "show_image"
+SERVICE_START_CHRONOGRAPH = "start_chronograph"
+SERVICES = (
+    SERVICE_SHOW_ICON_MESSAGE, SERVICE_SHOW_TEXT, SERVICE_START_COUNTDOWN, SERVICE_SET_SCOREBOARD,
+    SERVICE_SHOW_CLOCK, SERVICE_SHOW_EFFECT, SERVICE_SHOW_IMAGE, SERVICE_START_CHRONOGRAPH,
+)
 
 ATTR_RESTORE_AFTER = "restore_after"
+EFFECT_COLOR_FIELDS = ("color_1", "color_2", "color_3", "color_4")
 COUNTDOWN_MAX = timedelta(minutes=59, seconds=59)  # device limit
 
 
@@ -88,6 +96,26 @@ SCHEMAS = {
     SERVICE_SET_SCOREBOARD: _schema({
         vol.Optional("home"): vol.All(vol.Coerce(int), vol.Range(min=0, max=999)),
         vol.Optional("away"): vol.All(vol.Coerce(int), vol.Range(min=0, max=999)),
+        **_RESTORE_AFTER,
+    }),
+    SERVICE_SHOW_CLOCK: _schema({
+        vol.Optional("style"): vol.In(list(CLOCK_STYLES)),
+        vol.Optional("color"): _rgb_color,
+        vol.Optional("show_date"): cv.boolean,
+        vol.Optional("hour24"): cv.boolean,
+        **_RESTORE_AFTER,
+    }),
+    SERVICE_SHOW_EFFECT: _schema({
+        vol.Optional("effect"): vol.In(list(EFFECT_TYPES)),
+        **{vol.Optional(field): _rgb_color for field in EFFECT_COLOR_FIELDS},
+        **_RESTORE_AFTER,
+    }),
+    SERVICE_SHOW_IMAGE: _schema({
+        vol.Required("image"): cv.string,
+        **_RESTORE_AFTER,
+    }),
+    SERVICE_START_CHRONOGRAPH: _schema({
+        **_RESTORE_AFTER,
     }),
 }
 
@@ -183,11 +211,43 @@ async def _set_scoreboard(coordinator: IDotMatrixDataUpdateCoordinator, call: Se
     await _async_run(coordinator, call, lambda: coordinator.async_display_scoreboard(home, away))
 
 
+async def _show_clock(coordinator: IDotMatrixDataUpdateCoordinator, call: ServiceCall) -> None:
+    style = call.data.get("style")
+    await _async_run(coordinator, call, lambda: coordinator.async_show_clock(
+        style=CLOCK_STYLES[style] if style is not None else None,
+        show_date=call.data.get("show_date"),
+        hour24=call.data.get("hour24"),
+        color=call.data.get("color"),
+    ))
+
+
+async def _show_effect(coordinator: IDotMatrixDataUpdateCoordinator, call: ServiceCall) -> None:
+    effect = call.data.get("effect", coordinator.data.get("effect_mode"))
+    colors = [call.data[field] for field in EFFECT_COLOR_FIELDS if field in call.data]
+    if len(colors) == 1:
+        colors *= 2  # the device needs at least two colors
+    await _async_run(
+        coordinator, call, lambda: coordinator.async_display_effect(EFFECT_TYPES[effect], colors or None)
+    )
+
+
+async def _show_image(coordinator: IDotMatrixDataUpdateCoordinator, call: ServiceCall) -> None:
+    await _async_run(coordinator, call, lambda: coordinator.async_display_image(call.data["image"].strip()))
+
+
+async def _start_chronograph(coordinator: IDotMatrixDataUpdateCoordinator, call: ServiceCall) -> None:
+    await _async_run(coordinator, call, coordinator.async_start_chronograph)
+
+
 _HANDLERS = {
     SERVICE_SHOW_ICON_MESSAGE: _show_icon_message,
     SERVICE_SHOW_TEXT: _show_text,
     SERVICE_START_COUNTDOWN: _start_countdown,
     SERVICE_SET_SCOREBOARD: _set_scoreboard,
+    SERVICE_SHOW_CLOCK: _show_clock,
+    SERVICE_SHOW_EFFECT: _show_effect,
+    SERVICE_SHOW_IMAGE: _show_image,
+    SERVICE_START_CHRONOGRAPH: _start_chronograph,
 }
 
 
