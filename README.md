@@ -85,9 +85,10 @@ Once configured, the integration creates several entities:
 
 ### Text Entities
 - **Text: Message**: Send scrolling text messages to the display
-- **Image: File**: Send any image (PNG, JPEG, BMP, WebP, or animated GIF) by setting a local file path or http(s) URL. Static images are automatically sharpened before upload to improve legibility at small pixel counts.
+- **Image: File**: Send any image (PNG, JPEG, BMP, WebP, or animated GIF) by setting a local file path or http(s) URL. Static images are automatically sharpened before upload to improve legibility at small pixel counts. A [LaMetric icon](https://developer.lametric.com/icons) such as `lam:18391` fills the screen with sharp, enlarged pixels and keeps its animation.
 - **Icon & Message: Icon**: Icon shown in the top portion of the screen. One of:
   - An MDI icon name: `mdi:home`, `mdi:thermometer`, `mdi:weather-sunny` — the MDI webfont is downloaded and cached automatically on first use
+  - A LaMetric icon: `lam:18391` — use the number shown in the [LaMetric icon gallery](https://developer.lametric.com/icons). The icon is downloaded and cached on first use. Animated icons keep animating: the icon and the scrolling text loop together, so neither jumps when the animation restarts.
   - A local file path: `/config/www/icons/home.png`
   - An http(s) URL
 
@@ -100,7 +101,7 @@ Once configured, the integration creates several entities:
 - **Clock: Style**: Choose between different clock display styles
 - **Clock: Color**: Choose the clock's display color (White, Red, Green, Blue, Yellow, Cyan, Magenta, Orange, Pink, or Rainbow)
 - **Effect: Mode**: Select visual effects
-- **Icon & Message: Text Color** / **Icon & Message: Icon Color**: Preset colors used by Icon & Message. The icon color applies to MDI icons only — image files keep their own colors. Changing either re-sends the message if it is currently on screen. Any other color can be set with the `idotmatrix.show_icon_message` action; the select then shows `custom`.
+- **Icon & Message: Text Color** / **Icon & Message: Icon Color**: Preset colors used by Icon & Message. The icon color applies to MDI icons only — LaMetric icons and image files keep their own colors. Changing either re-sends the message if it is currently on screen. Any other color can be set with the `idotmatrix.show_icon_message` action; the select then shows `custom`.
 
 ### Image Entities
 - **Display Preview**: An (animated) picture of what the display is showing, enlarged with sharp pixels. The display can't be read back, so the preview is built from what Home Assistant sends:
