@@ -93,7 +93,7 @@ Once configured, the integration creates several entities:
   - An http(s) URL
 
   Changing it re-sends the message if Icon & Message is currently on screen.
-- **Icon & Message: Text**: Text shown below the icon; setting it displays icon + text. Text that fits the screen width is shown centred and still; longer text scrolls ping-pong style (left-aligned → right-aligned and back, with a short pause and a small margin at each end), so it never leaves the screen. Very long texts scroll in bigger steps because the device is limited to 64 animation frames. The text uses the pixel font Press Start 2P (8 px on 16×16 and 32×32 screens, 24 px on 64×64), which covers umlauts and accents of most European languages (German, French, Spanish, Nordic, Polish, Czech, Hungarian, Turkish, …) plus € and °.
+- **Icon & Message: Text**: Text shown below the icon; setting it displays icon + text. Text that fits the screen width is shown centred and still; longer text scrolls ping-pong style (left-aligned → right-aligned and back, with a short pause and a small margin at each end), so it never leaves the screen. Very long texts scroll in bigger steps because the device is limited to 64 animation frames. The text uses the font chosen in **Font**.
 - **Countdown: Timer Entity**: Optional — enter a `timer.*` entity ID (e.g. `timer.kitchen`) to sync the iDotMatrix countdown automatically with that HA Timer. When the timer starts, pauses, resumes, or finishes, the display follows. Clear the field to disable the link.
 
 ### Select Entities
@@ -101,6 +101,17 @@ Once configured, the integration creates several entities:
 - **Clock: Style**: Choose between different clock display styles
 - **Clock: Color**: Choose the clock's display color from the presets. Any other color can be set with the `idotmatrix.show_clock` action; the select then shows `custom`.
 - **Effect: Mode**: Select visual effects
+- **Font**: The font for all text the integration draws: **Text: Message** (and `idotmatrix.show_text`) and **Icon & Message** (and `idotmatrix.show_icon_message`). Changing it redraws text that is on screen. Each font is drawn at the largest size where every font pixel is a whole number of LEDs, so it stays sharp:
+
+  | Font | Look | Characters | Icon & Message text (16 / 32 / 64 px screen) |
+  |---|---|---|---|
+  | Press Start 2P (default) | bold, wide, arcade | most European languages (German, French, Spanish, Nordic, Polish, Czech, Hungarian, Turkish, …), € and ° | 8 / 8 / 24 px |
+  | Tiny5 | small, narrow | most European languages | 8 / 8 / 16 px (accents clipped on 16×16) |
+  | Cozette | thin, terminal | most European languages | 7 / 13 / 26 px (not quite sharp on 16×16) |
+  | Rain DRM3 | rounded | most European languages except Turkish (ğ, ı, İ) and Esperanto | 6 / 13 / 24 px |
+  | Spleen | thin, terminal | most European languages; ASCII only on 16×16 | 8 / 16 / 24 px |
+
+  For **Text: Message** the font size is rounded down to the font's nearest sharp size that fits the display's 16×32 character cell (Rain DRM3 uses the exact size). Characters a font lacks are left out or shown as a box.
 - **Icon & Message: Text Color** / **Icon & Message: Icon Color**: Preset colors used by Icon & Message. The icon color applies to MDI icons only — LaMetric icons and image files keep their own colors. Changing either re-sends the message if it is currently on screen. Any other color can be set with the `idotmatrix.show_icon_message` action; the select then shows `custom`.
 
 ### Image Entities
