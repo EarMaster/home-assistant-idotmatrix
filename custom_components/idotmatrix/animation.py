@@ -83,12 +83,21 @@ def fit_image(img, box_w: int, box_h: int):
 
 
 def save_gif(frames: list, durations: list[int]) -> bytes:
-    """Encode RGB frames as a looping GIF the device accepts."""
-    from PIL import Image
+    """Encode RGB frames as a looping GIF the device accepts.
 
-    # Same palette conversion as the library's GIF normalisation.
-    frames = [f.convert("P", palette=Image.Palette.ADAPTIVE, colors=256) for f in frames]
-    # Same encoder settings as the library: it notes optimize=False breaks uploads.
+    Like the library's GIF encoder: the device garbles or drops frames whose color
+    tables differ in size, so all frames share one palette padded to a fixed size,
+    and optimize=False keeps Pillow from shrinking the tables per frame again.
+    """
+    from idotmatrix.util import image_utils
+
+    colors = len({color for frame in frames for _, color in frame.getcolors(256 * 256) or []})
+    colors = min(256, max(colors, 1))
+    table_size = image_utils.palette_table_size(colors)
+    frames = [
+        image_utils.pad_palette(frame, table_size)
+        for frame in image_utils.palettize_together(frames, colors=colors)
+    ]
     out = io.BytesIO()
     frames[0].save(
         out,
@@ -97,7 +106,7 @@ def save_gif(frames: list, durations: list[int]) -> bytes:
         append_images=frames[1:],
         duration=durations if len(durations) > 1 else durations[0],
         loop=0,
-        optimize=True,
+        optimize=False,
         disposal=2,
     )
     return out.getvalue()
