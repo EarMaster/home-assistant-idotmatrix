@@ -93,7 +93,7 @@ Once configured, the integration creates several entities:
   - An http(s) URL
 
   Changing it re-sends the message if Icon & Message is currently on screen.
-- **Icon & Message: Text**: Text shown below the icon; setting it displays icon + text. Text that fits the screen width is shown centred and still; longer text scrolls ping-pong style (left-aligned → right-aligned and back, with a short pause and a small margin at each end), so it never leaves the screen. Very long texts scroll in bigger steps because the device is limited to 64 animation frames.
+- **Icon & Message: Text**: Text shown below the icon; setting it displays icon + text. Text that fits the screen width is shown centred and still; longer text scrolls ping-pong style (left-aligned → right-aligned and back, with a short pause and a small margin at each end), so it never leaves the screen. Very long texts scroll in bigger steps because the device is limited to 64 animation frames. The text uses the pixel font Press Start 2P (8 px on 16×16 and 32×32 screens, 24 px on 64×64), which covers umlauts and accents of most European languages (German, French, Spanish, Nordic, Polish, Czech, Hungarian, Turkish, …) plus € and °.
 - **Countdown: Timer Entity**: Optional — enter a `timer.*` entity ID (e.g. `timer.kitchen`) to sync the iDotMatrix countdown automatically with that HA Timer. When the timer starts, pauses, resumes, or finishes, the display follows. Clear the field to disable the link.
 
 ### Select Entities
