@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.1] - 2026-11-01
+
+### Added
+- Font select per device: Press Start 2P, Tiny5, Cozette, Rain DRM3 or Spleen for Text: Message and Icon & Message (including their actions and the Display Preview); changing it redraws text on screen
+
+### Changed
+- Text: Message uses the selected font (default Press Start 2P instead of Rain DRM3); its font size is rounded down to the font's nearest sharp size that fits the 16×32 character cell (Rain DRM3 keeps the exact size)
+
 ## [1.10.0] - 2026-10-31
 
 ### Added
