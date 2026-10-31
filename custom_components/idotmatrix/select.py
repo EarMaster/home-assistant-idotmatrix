@@ -7,6 +7,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from . import text_fonts
 from .const import CLOCK_STYLES, COLOR_PRESETS, DOMAIN, EFFECT_TYPES
 from .coordinator import IDotMatrixDataUpdateCoordinator
 from .entity import IDotMatrixEntity
@@ -28,6 +29,7 @@ async def async_setup_entry(
         IDotMatrixEffectSelect(coordinator),
         IDotMatrixIconMessageColorSelect(coordinator, "text"),
         IDotMatrixIconMessageColorSelect(coordinator, "icon"),
+        IDotMatrixFontSelect(coordinator),
     ])
 
 
@@ -150,4 +152,23 @@ class IDotMatrixEffectSelect(IDotMatrixEntity, SelectEntity):
         """Select an option."""
         effect_id = EFFECT_TYPES[option]
         await self.coordinator.async_display_effect(effect_id)
+        await self.coordinator.async_request_refresh()
+
+
+class IDotMatrixFontSelect(IDotMatrixEntity, SelectEntity):
+    """Font for everything the integration draws as text: Text: Message and Icon & Message."""
+
+    def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "text_font")
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_name = "Font"
+        self._attr_icon = "mdi:format-font"
+        self._attr_options = list(text_fonts.FONTS)
+
+    @property
+    def current_option(self) -> str | None:
+        return self.coordinator.data.get("text_font", text_fonts.DEFAULT_FONT)
+
+    async def async_select_option(self, option: str) -> None:
+        await self.coordinator.async_set_text_font(option)
         await self.coordinator.async_request_refresh()

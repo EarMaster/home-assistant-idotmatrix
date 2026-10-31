@@ -22,7 +22,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 import homeassistant.util.dt as dt_util
 
-from . import animation, preview
+from . import animation, preview, text_fonts
 from .const import (
     CLOCK_STYLES,
     COLOR_PRESETS,
@@ -49,7 +49,7 @@ _PERSIST_KEYS = frozenset({
     "brightness", "screen_flipped",
     "clock_style", "clock_show_date", "clock_hour24", "clock_color",
     "effect_mode", "effect_colors",
-    "last_message", "text_color", "text_font_size", "text_speed",
+    "last_message", "text_color", "text_font_size", "text_speed", "text_font",
     "last_image", "last_image_kind",
     "icon_message_icon", "icon_message_text", "icon_message_text_color", "icon_message_icon_color",
     "scoreboard_home", "scoreboard_away",
@@ -114,10 +114,6 @@ _PING_PONG_MS_PER_PX = 70
 _PING_PONG_MAX_FRAME_MS = 150
 _TEXT_GLYPH_GAP_PX = 1
 _TEXT_SPACE_PX = 3
-# Icon & Message text font (ships with the library); covers Latin-1 and Latin Extended-A.
-_ICON_MESSAGE_FONT = "16-PressStart2P-Regular.ttf"
-# Characters the font lacks, replaced by their closest look-alikes.
-_ICON_MESSAGE_SUBSTITUTES = str.maketrans({"Ș": "Ş", "ș": "ş", "Ț": "Ţ", "ț": "ţ", "ẞ": "SS"})
 _SCROLL_PADDING_PX = 2
 
 # The device clock drifts and does not know about DST, so it is re-synced daily
@@ -172,6 +168,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             "text_color": [255, 255, 255],
             "text_font_size": 24,
             "text_speed": 50,
+            # Font for everything the integration draws as text (Text and Icon & Message).
+            "text_font": text_fonts.DEFAULT_FONT,
             "last_image": "",
             "icon_message_icon": "mdi:information-outline",
             "icon_message_text": "",
@@ -530,15 +528,14 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             self._state["text_color"] = list(color)
         if speed is not None:
             self._state["text_speed"] = speed
-        font_size = self._state["text_font_size"]
+        face = await self._async_text_mode_face()
         color = tuple(self._state["text_color"])
         speed = self._state["text_speed"]
-        font_path = self._text_font_path()
         success = await self._async_send_command(
             self._client.text.show_text,
-            message,
-            font_path=font_path,
-            font_size=font_size,
+            message.translate(text_fonts.SUBSTITUTES),
+            font_path=face.path,
+            font_size=face.size,
             text_color=color,
             speed=speed,
         )
@@ -691,7 +688,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         return await self.hass.async_add_executor_job(
             self._create_icon_message_gif,
             icon_data, self._state.get("icon_message_text", "").strip(), self.screen_size_px,
-            tuple(self._state["icon_message_text_color"]), (0, 0, 0),
+            tuple(self._state["icon_message_text_color"]), (0, 0, 0), self._state["text_font"],
         )
 
     # Display Preview
@@ -738,15 +735,15 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 return native
             return await self.hass.async_add_executor_job(preview.blank_gif, size)
         if mode == "text" and state.get("last_message"):
-            font_path = self._text_font_path()
+            face = await self._async_text_mode_face()
             return await self.hass.async_add_executor_job(
-                preview.text_preview_gif, state["last_message"], font_path,
-                state.get("text_font_size", 24), tuple(state.get("text_color", (255, 255, 255))), size,
+                preview.text_preview_gif, state["last_message"].translate(text_fonts.SUBSTITUTES),
+                face.path, face.size, tuple(state.get("text_color", (255, 255, 255))), size,
             )
         icon, label, color = preview.fallback_spec(mode, state, now)
         icon_data = await self._get_mdi_icon_bytes(icon[4:], color)
         return await self.hass.async_add_executor_job(
-            self._create_icon_message_gif, icon_data, label, size, color, (0, 0, 0)
+            self._create_icon_message_gif, icon_data, label, size, color, (0, 0, 0), state["text_font"]
         )
 
     async def async_update_icon_message(self, display: bool = False, **settings: str) -> bool:
@@ -848,17 +845,22 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         img.save(out, format="PNG")
         return out.getvalue()
 
-    @staticmethod
-    def _library_font_path(name: str) -> str:
-        """Return the path to a font that ships with the library."""
-        import idotmatrix
+    async def _async_text_mode_face(self) -> text_fonts.Face:
+        """The selected font at the size text mode uses for the current font size."""
+        return await self.hass.async_add_executor_job(
+            text_fonts.text_mode_face, self._state["text_font"], self._state["text_font_size"]
+        )
 
-        return os.path.join(os.path.dirname(idotmatrix.__file__), "fonts", name)
-
-    @staticmethod
-    def _text_font_path() -> str:
-        """Return the path to the text font the library uses for text mode."""
-        return IDotMatrixDataUpdateCoordinator._library_font_path("Rain-DRM3.otf")
+    async def async_set_text_font(self, font: str) -> bool:
+        """Select the font for text, and redraw text that is on screen with it."""
+        self._state["text_font"] = font
+        self._state_dirty = True
+        mode = self._state.get("current_mode")
+        if mode == "text" and self._state.get("last_message"):
+            return await self.async_display_text(self._state["last_message"])
+        if mode == "image" and self._state.get("last_image_kind") == "icon_message":
+            return await self.async_display_icon_message()
+        return True
 
     async def _get_lametric_icon_bytes(self, source: str) -> bytes:
         """Return a LaMetric icon (GIF or PNG) for ``lam:<id>``, downloading it on first use."""
@@ -997,13 +999,14 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         screen_size: int,
         text_color: tuple,
         bg_color: tuple,
+        font_name: str = text_fonts.DEFAULT_FONT,
     ) -> bytes:
         """Create an animated GIF: icon in top strip, scrolling text in bottom strip.
 
         Animated icons (GIFs, e.g. LaMetric icons) keep animating; the icon and text
         loops are combined so both restart cleanly when the GIF loops.
         """
-        from PIL import Image, ImageDraw, ImageFont
+        from PIL import Image, ImageDraw
 
         icon_height = max(8, int(screen_size * 0.55))
         text_height = screen_size - icon_height
@@ -1014,22 +1017,18 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             for ms, img in animation.load_frames(icon_data, bg_color)
         ]
 
-        # Press Start 2P is drawn on an 8 px grid: use the largest multiple of 8 that
-        # fits the strip (8 px on 16/32 px screens, 24 px on 64 px), so every font
-        # pixel is a whole number of LEDs. Gaps and spaces scale with the font pixel.
-        font_size = 8 * max(1, text_height // 8)
-        font_px = font_size // 8
-        font = ImageFont.truetype(IDotMatrixDataUpdateCoordinator._library_font_path(_ICON_MESSAGE_FONT), font_size)
-        message = message.translate(_ICON_MESSAGE_SUBSTITUTES)
+        # The largest size at which every font pixel is a whole number of LEDs and the
+        # text fits the strip. Gaps and spaces scale with the font pixel.
+        face, text_y = text_fonts.strip_face(font_name, text_height)
+        font_px = face.px
+        font = text_fonts.load(face)
+        message = message.translate(text_fonts.SUBSTITUTES)
         # Render glyph by glyph, trim each to the pixels actually drawn, and join them
         # with a one-font-pixel gap. This is tighter than the font's own spacing, and the
         # width comes from real pixels: mono (fontmode "1") glyphs are 1–2 px wider
         # than textbbox() reports, which broke the fits-or-scrolls decision.
         # The vertical position comes from the font's tallest accented capitals and
         # descenders, not from the message, so the baseline never moves.
-        dummy = ImageDraw.Draw(Image.new("L", (1, 1)))
-        bbox = dummy.textbbox((0, 0), "ÄÅÉgjpqy", font=font)
-        text_y = max(0, (text_height - (bbox[3] - bbox[1])) // 2)
         glyphs = []
         for char in message:
             if char.isspace():
@@ -1039,7 +1038,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             glyph_draw = ImageDraw.Draw(glyph)
             glyph_draw.fontmode = "1"
             # Same y for every glyph keeps them on a common baseline.
-            glyph_draw.text((text_height // 2, text_y - bbox[1]), char, font=font, fill=255)
+            glyph_draw.text((text_height // 2, text_y), char, font=font, fill=255)
             ink = glyph.getbbox()
             if ink:
                 glyphs.append(glyph.crop((ink[0], 0, ink[2], text_height)))
