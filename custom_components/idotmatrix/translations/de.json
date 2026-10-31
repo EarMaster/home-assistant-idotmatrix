@@ -59,7 +59,7 @@
       "fields": {
         "icon": {
           "name": "Symbol",
-          "description": "Ein MDI-Symbol. In YAML auch ein lokaler Dateipfad (/config/www/icons/home.png) oder eine http(s)-Bild-URL."
+          "description": "Ein MDI-Symbol. In YAML auch ein LaMetric-Symbol (lam:18391, animierte Symbole bleiben animiert), ein lokaler Dateipfad (/config/www/icons/home.png) oder eine http(s)-Bild-URL."
         },
         "text": {
           "name": "Text",

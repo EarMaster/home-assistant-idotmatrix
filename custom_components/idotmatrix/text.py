@@ -70,7 +70,8 @@ class IDotMatrixImageDisplay(IDotMatrixEntity, TextEntity):
 
     Supported formats: PNG, JPEG, BMP, WebP (static) and GIF (animated).
     Static images are sharpened with an unsharp mask before upload to improve
-    legibility on the tiny LED canvas.
+    legibility on the tiny LED canvas. ``lam:<id>`` shows a LaMetric icon
+    (e.g. ``lam:18391``), enlarged with sharp pixels and keeping its animation.
     """
 
     def __init__(self, coordinator: IDotMatrixDataUpdateCoordinator) -> None:
@@ -99,8 +100,10 @@ class IDotMatrixIconMessageIcon(IDotMatrixEntity, TextEntity):
     One of:
     - An MDI icon name: ``mdi:home``, ``mdi:thermometer``, ``mdi:weather-sunny``
       (the MDI webfont is downloaded and cached on first use)
+    - A LaMetric icon: ``lam:18391`` (downloaded and cached on first use; animated
+      icons keep animating, in sync with the scrolling text)
     - A local file path: ``/config/www/icons/home.png``
-    - An http(s) URL to a PNG/JPEG image
+    - An http(s) URL to a PNG/JPEG/GIF image
 
     Changing it re-sends the message if Icon & Message is currently on screen.
     """

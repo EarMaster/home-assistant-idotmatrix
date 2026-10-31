@@ -59,7 +59,7 @@
       "fields": {
         "icon": {
           "name": "Icon",
-          "description": "An MDI icon. In YAML this can also be a local file path (/config/www/icons/home.png) or an http(s) image URL."
+          "description": "An MDI icon. In YAML this can also be a LaMetric icon (lam:18391, animated icons keep animating), a local file path (/config/www/icons/home.png) or an http(s) image URL."
         },
         "text": {
           "name": "Text",

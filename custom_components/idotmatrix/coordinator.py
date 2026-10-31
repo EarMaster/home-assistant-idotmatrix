@@ -22,7 +22,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 import homeassistant.util.dt as dt_util
 
-from . import preview
+from . import animation, preview
 from .const import (
     CLOCK_STYLES,
     COLOR_PRESETS,
@@ -106,7 +106,7 @@ _MDI_CSS_URL = "https://cdn.jsdelivr.net/npm/@mdi/font@latest/css/materialdesign
 _WRITE_WITHOUT_RESPONSE_DELAY_S = 0.02
 
 # Icon & Message animation: the device handles at most 64 GIF frames.
-_GIF_MAX_FRAMES = 64
+_GIF_MAX_FRAMES = animation.GIF_MAX_FRAMES
 _PING_PONG_PAUSE_FRAMES = 6
 _PING_PONG_MS_PER_PX = 70
 _PING_PONG_MAX_FRAME_MS = 150
@@ -613,7 +613,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             image_data = await self._fetch_image_data(image_source)
             is_gif, upload_data, native = await self.hass.async_add_executor_job(
-                self._adapt_image, image_data, sharpen
+                self._adapt_image, image_data, sharpen, animation.is_lametric(image_source)
             )
             if is_gif:
                 # GIF upload uses its own command byte (1) which signals the device
@@ -713,7 +713,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 return await self._async_build_icon_message_gif()
             if state.get("last_image"):
                 image_data = await self._fetch_image_data(state["last_image"])
-                _, _, native = await self.hass.async_add_executor_job(self._adapt_image, image_data, True)
+                _, _, native = await self.hass.async_add_executor_job(
+                    self._adapt_image, image_data, True, animation.is_lametric(state["last_image"])
+                )
                 return native
             return await self.hass.async_add_executor_job(preview.blank_gif, size)
         if mode == "text" and state.get("last_message"):
@@ -834,8 +836,43 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
         return os.path.join(os.path.dirname(idotmatrix.__file__), "fonts", "Rain-DRM3.otf")
 
+    async def _get_lametric_icon_bytes(self, source: str) -> bytes:
+        """Return a LaMetric icon (GIF or PNG) for ``lam:<id>``, downloading it on first use."""
+        import aiohttp
+
+        icon_id = animation.lametric_icon_id(source)
+        path = self.hass.config.path(f".storage/idotmatrix_lametric/{icon_id}")
+
+        def _read() -> bytes | None:
+            try:
+                with open(path, "rb") as fh:
+                    return fh.read()
+            except FileNotFoundError:
+                return None
+
+        data = await self.hass.async_add_executor_job(_read)
+        if data is not None:
+            return data
+        _LOGGER.info("Downloading LaMetric icon %s", icon_id)
+        try:
+            data = await self._fetch_image_data(animation.LAMETRIC_ICON_URL.format(icon_id))
+        except aiohttp.ClientResponseError as ex:
+            if ex.status == 404:
+                raise ValueError(f"Unknown LaMetric icon lam:{icon_id}") from ex
+            raise
+
+        def _write() -> None:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as fh:
+                fh.write(data)
+
+        await self.hass.async_add_executor_job(_write)
+        return data
+
     async def _fetch_image_data(self, source: str) -> bytes:
-        """Return raw bytes from a local file path or http(s) URL."""
+        """Return raw bytes from a ``lam:<id>`` LaMetric icon, local file path or http(s) URL."""
+        if animation.is_lametric(source):
+            return await self._get_lametric_icon_bytes(source)
         if source.startswith(("http://", "https://")):
             import aiohttp
             async with aiohttp.ClientSession() as session:
@@ -847,18 +884,24 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 return fh.read()
         return await self.hass.async_add_executor_job(_read)
 
-    def _adapt_image(self, image_data: bytes, sharpen: bool) -> tuple[bool, bytes, bytes]:
+    def _adapt_image(
+        self, image_data: bytes, sharpen: bool, pixel_art: bool = False
+    ) -> tuple[bool, bytes, bytes]:
         """Prepare image bytes for upload; also return the exact on-screen pixels.
 
-        Returns (is_gif, upload_data, native_preview_gif). GIFs are normalised by the
-        library (canvas size, palette, frame limit) and uploaded as-is; static images
-        are uploaded as processed PNG and the library's own canvas adaptation is
-        repeated here so the preview matches what it sends.
+        Returns (is_gif, upload_data, native_preview_gif). Pixel art (LaMetric icons)
+        is enlarged with sharp pixels into a GIF here, keeping its frame timing. Other
+        GIFs are normalised by the library (canvas size, palette, frame limit) and
+        uploaded as-is; static images are uploaded as processed PNG and the library's
+        own canvas adaptation is repeated here so the preview matches what it sends.
         """
         from idotmatrix.modules.image import ImageModule
         from idotmatrix.util.image_utils import ResizeMode
 
         size = self.screen_size_px
+        if pixel_art:
+            gif_data = animation.fullscreen_gif(image_data, size)
+            return True, gif_data, gif_data
         if self._detect_gif(image_data):
             gif_data = self._client.gif._load_gif_and_adapt_to_canvas(
                 io.BytesIO(image_data), size, ResizeMode.FIT, True, (0, 0, 0), None,
@@ -931,32 +974,21 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         text_color: tuple,
         bg_color: tuple,
     ) -> bytes:
-        """Create an animated GIF: icon in top strip, scrolling text in bottom strip."""
-        from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps
+        """Create an animated GIF: icon in top strip, scrolling text in bottom strip.
+
+        Animated icons (GIFs, e.g. LaMetric icons) keep animating; the icon and text
+        loops are combined so both restart cleanly when the GIF loops.
+        """
+        from PIL import Image, ImageDraw, ImageFont
 
         icon_height = max(8, int(screen_size * 0.55))
         text_height = screen_size - icon_height
 
-        # Prepare icon
-        icon_img = Image.open(io.BytesIO(icon_data))
-        if icon_img.mode in ("RGBA", "LA", "P"):
-            if icon_img.mode == "P":
-                icon_img = icon_img.convert("RGBA")
-            bg = Image.new("RGB", icon_img.size, bg_color)
-            bg.paste(icon_img, mask=icon_img.split()[-1] if icon_img.mode in ("RGBA", "LA") else None)
-            icon_img = bg
-        else:
-            icon_img = icon_img.convert("RGB")
-        try:
-            icon_img = ImageOps.exif_transpose(icon_img)
-        except Exception:
-            pass
         # Fit into the icon strip keeping the aspect ratio, centred horizontally.
-        if icon_img.size != (icon_height, icon_height):
-            icon_img.thumbnail((screen_size, icon_height), Image.LANCZOS)
-            icon_img = icon_img.filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
-        icon_x = (screen_size - icon_img.width) // 2
-        icon_y = (icon_height - icon_img.height) // 2
+        icon_frames = [
+            (ms, animation.fit_image(img, screen_size, icon_height))
+            for ms, img in animation.load_frames(icon_data, bg_color)
+        ]
 
         # Render glyph by glyph, trim each to the pixels actually drawn, and join them
         # with a 1 px gap. This is tighter than the font's own 2 px spacing, and the
@@ -995,48 +1027,43 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         # Scrolling text keeps a small gap to the screen edges at both turning points.
         overflow = text_width + 2 * _SCROLL_PADDING_PX - screen_size
         if text_width <= screen_size:
-            positions = [(screen_size - text_width) // 2]
-            frame_ms = 1000
+            text_timeline = [(1000, (screen_size - text_width) // 2)]
+            pauses: tuple[int, ...] = ()
         else:
             max_steps = (_GIF_MAX_FRAMES - 2 * _PING_PONG_PAUSE_FRAMES) // 2
             step = math.ceil(overflow / max_steps)
             offsets = list(range(0, overflow, step)) + [overflow]
-            positions = [_SCROLL_PADDING_PX - o for o in (
-                [offsets[0]] * _PING_PONG_PAUSE_FRAMES
-                + offsets[1:-1]
-                + [offsets[-1]] * _PING_PONG_PAUSE_FRAMES
-                + offsets[-2:0:-1]
-            )]
             frame_ms = min(_PING_PONG_MAX_FRAME_MS, _PING_PONG_MS_PER_PX * step)
+            pause_ms = _PING_PONG_PAUSE_FRAMES * frame_ms
+            text_timeline = [(ms, _SCROLL_PADDING_PX - o) for ms, o in (
+                [(pause_ms, offsets[0])]
+                + [(frame_ms, o) for o in offsets[1:-1]]
+                + [(pause_ms, offsets[-1])]
+                + [(frame_ms, o) for o in offsets[-2:0:-1]]
+            )]
+            pauses = (0, len(offsets) - 1)
 
+        # Both loops restart together; the text pauses absorb the length difference.
+        timeline = animation.combine(
+            [(ms, i) for i, (ms, _) in enumerate(icon_frames)], text_timeline, pauses
+        )
         frames = []
-        for x in positions:
+        for _, (icon_index, x) in timeline:
+            icon_img = icon_frames[icon_index][1]
             frame = Image.new("RGB", (screen_size, screen_size), bg_color)
-            frame.paste(icon_img, (icon_x, icon_y))
+            frame.paste(icon_img, ((screen_size - icon_img.width) // 2, (icon_height - icon_img.height) // 2))
             frame.paste(text_surf, (x, icon_height))
-            # Same palette conversion as the library's GIF normalisation.
-            frames.append(frame.convert("P", palette=Image.Palette.ADAPTIVE, colors=256))
+            frames.append(frame)
 
         import logging as _logging
         _logging.getLogger(__name__).debug(
             "icon+message GIF: screen=%d icon_height=%d text_height=%d msg_w=%d "
-            "frames=%d duration=%dms",
-            screen_size, icon_height, text_height, text_width, len(frames), frame_ms,
+            "icon_frames=%d frames=%d loop=%dms",
+            screen_size, icon_height, text_height, text_width, len(icon_frames), len(frames),
+            animation.cycle_ms(timeline),
         )
 
-        # Same encoder settings as the library: it notes optimize=False breaks uploads.
-        out = io.BytesIO()
-        frames[0].save(
-            out,
-            format="GIF",
-            save_all=True,
-            append_images=frames[1:],
-            duration=frame_ms,
-            loop=0,
-            optimize=True,
-            disposal=2,
-        )
-        gif_bytes = out.getvalue()
+        gif_bytes = animation.save_gif(frames, [int(ms) for ms, _ in timeline])
         _logging.getLogger(__name__).debug(
             "icon+message GIF size: %d bytes", len(gif_bytes)
         )
