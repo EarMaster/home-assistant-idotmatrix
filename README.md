@@ -99,7 +99,7 @@ Once configured, the integration creates several entities:
 ### Select Entities
 - **Display Mode**: Shows which content is currently active (`clock`, `text`, `effect`, `image`, `chronograph`, `scoreboard`, `countdown`) and lets you switch between modes. Selecting a mode re-activates the last content sent for that type (e.g. selecting `clock` re-sends the current clock style; selecting `text` re-sends the last scrolling message). The value updates automatically whenever any other entity changes what is shown on the display.
 - **Clock: Style**: Choose between different clock display styles
-- **Clock: Color**: Choose the clock's display color (White, Red, Green, Blue, Yellow, Cyan, Magenta, Orange, Pink, or Rainbow)
+- **Clock: Color**: Choose the clock's display color from the presets. Any other color can be set with the `idotmatrix.show_clock` action; the select then shows `custom`.
 - **Effect: Mode**: Select visual effects
 - **Icon & Message: Text Color** / **Icon & Message: Icon Color**: Preset colors used by Icon & Message. The icon color applies to MDI icons only — LaMetric icons and image files keep their own colors. Changing either re-sends the message if it is currently on screen. Any other color can be set with the `idotmatrix.show_icon_message` action; the select then shows `custom`.
 
@@ -119,8 +119,12 @@ All actions target a display by device, entity or area, and their editor is tran
 - **`idotmatrix.show_text`**: Show scrolling text with optional color, font size (8–32 px) and speed (1–100) in one call. Text supports templates. The settings are kept, so later **Text: Message** updates look the same.
 - **`idotmatrix.start_countdown`**: Start the countdown with a duration picker (up to 59:59) instead of setting Minutes and Seconds separately.
 - **`idotmatrix.set_scoreboard`**: Set home and/or away score in one display update.
+- **`idotmatrix.show_clock`**: Show the clock with optional style, full-spectrum color, date and 12/24-hour format in one call. Omitted settings keep their current value; the settings are kept for the Clock entities.
+- **`idotmatrix.show_effect`**: Show an effect in up to four colors of your choice (the effect entity always uses the last colors; before, effects were fixed to red, green and blue).
+- **`idotmatrix.show_image`**: Show an image, animated GIF or LaMetric icon (`lam:18391`) full screen, from a local path or URL. Updates **Image: File**.
+- **`idotmatrix.start_chronograph`**: Start the stopwatch from zero.
 
-`show_icon_message`, `show_text` and `start_countdown` accept **`restore_after`**: after that time the display returns to what it showed before (e.g. the clock), including that screen's text, colors and scores. For a countdown, the time counts from when the countdown ends. Several notifications in a row all return to the original screen, and anything else you show in the meantime cancels the restore.
+All actions accept **`restore_after`**: after that time the display returns to what it showed before (e.g. the clock), including that screen's text, colors and scores. For a countdown, the time counts from when the countdown ends. Several notifications in a row all return to the original screen, and anything else you show in the meantime cancels the restore.
 
 ### Number Entities
 - **Scoreboard: Home**: Home team score (0–999). Setting the value immediately sends both scores to the display.
@@ -208,6 +212,36 @@ automation:
           entity_id: text.idotmatrix_display_image
         data:
           value: "/config/www/logo.png"
+```
+
+### Doorbell Animation, Then Back
+```yaml
+automation:
+  - alias: "Doorbell on the display"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.doorbell
+        to: "on"
+    action:
+      - action: idotmatrix.show_image
+        target:
+          entity_id: text.display_display_image
+        data:
+          image: "lam:52079"
+          restore_after: "00:00:20"
+```
+
+### Party Effect in Custom Colors
+```yaml
+action: idotmatrix.show_effect
+target:
+  entity_id: text.display_display_image
+data:
+  effect: "Vertical Rainbow"
+  color_1: [255, 0, 128]
+  color_2: [0, 200, 255]
+  color_3: orange
+  restore_after: "00:05:00"
 ```
 
 ### Icon & Message — Door Alert
