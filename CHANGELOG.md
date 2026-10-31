@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-10-31
+
+### Added
+- Actions `show_clock` (style, any color, date, 12/24 h), `show_effect` (effect in up to four colors), `show_image` (file, URL or LaMetric icon) and `start_chronograph`, all with `restore_after`
+- `set_scoreboard` accepts `restore_after`
+
+### Changed
+- The clock color can be any color (Clock: Color shows "custom" for non-preset colors); effects keep the colors last set instead of always red, green and blue
+
 ## [1.9.3] - 2026-10-31
 
 ### Fixed
