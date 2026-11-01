@@ -122,6 +122,7 @@ custom_components/idotmatrix/
   image.py             Display Preview image entity
   preview.py           preview rendering (upscale, text approximation, fallbacks)
   animation.py         LaMetric icons (lam:<id>), pixel-art scaling, icon/text loop sync, 64-frame pruning
+  errors.py            DisplayError (translated user-facing errors, "exceptions" in strings.json) and typo suggestions for image sources
   text_fonts.py        selectable fonts and their sharp sizes (strip_face for Icon & Message, text_mode_face for text mode)
   fonts/               bundled fonts (Tiny5, Cozette, Spleen) with their licenses; Press Start 2P and Rain DRM3 come with the library
   services.yaml        action fields/selectors (texts are in strings.json / translations)
