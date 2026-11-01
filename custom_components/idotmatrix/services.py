@@ -14,7 +14,7 @@ import voluptuous as vol
 
 from homeassistant.const import ATTR_AREA_ID, ATTR_DEVICE_ID, ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -161,11 +161,7 @@ async def _async_run(
     restore_after: timedelta | None = call.data.get(ATTR_RESTORE_AFTER)
     snapshot = coordinator.snapshot_for_restore() if restore_after is not None else None
     if not await show():
-        raise HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="action_failed",
-            translation_placeholders={"device": coordinator.device_name},
-        )
+        raise coordinator.command_error()
     if snapshot is not None:
         coordinator.schedule_restore(snapshot, restore_extra + restore_after)
     await coordinator.async_request_refresh()

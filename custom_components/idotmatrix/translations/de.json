@@ -223,7 +223,43 @@
       "message": "Im gewählten Ziel wurde kein geladenes iDotMatrix-Display gefunden."
     },
     "action_failed": {
-      "message": "{device} konnte nicht aktualisiert werden. Prüfe, ob das Display in Reichweite und verbunden ist."
+      "message": "{device} hat die Aktualisierung nicht angenommen."
+    },
+    "not_connected": {
+      "message": "Keine Verbindung zu {device}. Prüfe, ob das Display eingeschaltet und in Bluetooth-Reichweite von Home Assistant oder einem Bluetooth-Proxy ist."
+    },
+    "command_failed": {
+      "message": "{device} hat die Aktualisierung nicht angenommen: {error}"
+    },
+    "image_source_typo": {
+      "message": "„{source}“ ist keine bekannte Bildquelle. Meintest du „{suggestion}“?"
+    },
+    "image_not_found": {
+      "message": "Bilddatei nicht gefunden: „{source}“. Verwende einen vollständigen Pfad (z. B. /config/www/icon.png), eine http(s)-URL, lam:ID für ein LaMetric-Icon oder, bei Icon & Message, mdi:NAME."
+    },
+    "mdi_not_supported": {
+      "message": "„{source}“: MDI-Icons funktionieren nur als Icon von Icon & Message. Für ein Vollbild verwende ein LaMetric-Icon (lam:ID), einen Dateipfad oder eine http(s)-URL."
+    },
+    "mdi_unknown": {
+      "message": "Unbekanntes MDI-Icon „mdi:{name}“. Icon-Namen findest du unter https://pictogrammers.com/library/mdi/"
+    },
+    "lametric_invalid": {
+      "message": "„{source}“ ist kein gültiges LaMetric-Icon. Verwende lam:ID, z. B. lam:18391."
+    },
+    "lametric_unknown": {
+      "message": "Das LaMetric-Icon {icon_id} existiert nicht. Icons findest du unter https://developer.lametric.com/icons"
+    },
+    "download_failed": {
+      "message": "{url} konnte nicht heruntergeladen werden: {error}"
+    },
+    "not_an_image": {
+      "message": "„{source}“ ist kein anzeigbares Bild (PNG, JPEG, BMP, WebP oder GIF)."
+    },
+    "image_failed": {
+      "message": "„{source}“ konnte nicht angezeigt werden: {error}"
+    },
+    "icon_message_incomplete": {
+      "message": "Icon & Message braucht ein Icon und einen Text."
     }
   }
 }

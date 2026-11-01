@@ -23,6 +23,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 import homeassistant.util.dt as dt_util
 
 from . import animation, preview, text_fonts
+from .errors import DisplayError, source_not_found
 from .const import (
     CLOCK_STYLES,
     COLOR_PRESETS,
@@ -151,6 +152,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         self._time_synced_offset: timedelta | None = None
         self._time_synced_at = None
         self._state_dirty = False
+        # Why the last device command failed (None if it succeeded), for error messages.
+        self._last_command_error: Exception | None = None
         self._store: Store = Store(hass, 1, f"{DOMAIN}.{self.mac_address}")
 
         self._state: dict[str, Any] = {
@@ -376,9 +379,11 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             try:
                 await command_func(*args, **kwargs)
                 self._state_dirty = True
+                self._last_command_error = None
                 return True
             except Exception as ex:
                 _LOGGER.warning("Command failed for %s: %s", self.mac_address, ex)
+                self._last_command_error = ex
                 # Only mark as disconnected if the BLE client is actually gone;
                 # non-BLE errors (e.g. PIL OSError for a missing font file) must
                 # not trigger a spurious disconnect/reconnect cycle.
@@ -388,6 +393,17 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 return False
 
     # Display control
+
+    def command_error(self) -> DisplayError:
+        """Error explaining why the last device command failed."""
+        if not self.connected:
+            return DisplayError("not_connected", device=self.device_name)
+        if self._last_command_error is not None:
+            return DisplayError(
+                "command_failed", device=self.device_name,
+                error=str(self._last_command_error) or type(self._last_command_error).__name__,
+            )
+        return DisplayError("action_failed", device=self.device_name)
 
     async def async_turn_on(self) -> bool:
         """Turn on the display."""
@@ -505,7 +521,10 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_restore(self, snapshot: dict[str, Any]) -> None:
         _LOGGER.debug("Restoring %s after temporary content", snapshot["mode"])
         self._state.update(copy.deepcopy(snapshot["state"]))
-        await self.async_activate_mode(snapshot["mode"])
+        try:
+            await self.async_activate_mode(snapshot["mode"])
+        except DisplayError as ex:
+            _LOGGER.warning("Could not restore %s: %s", snapshot["mode"], ex)
         await self.async_request_refresh()
 
     # Text
@@ -625,12 +644,21 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
     # Image
 
     async def async_display_image(self, image_source: str, sharpen: bool = True) -> bool:
-        """Display an image from a local file path or http(s) URL."""
+        """Display an image from a local file path or http(s) URL.
+
+        Raises DisplayError if the image can't be loaded; returns False if the
+        device did not accept it.
+        """
+        from PIL import UnidentifiedImageError
+
         try:
             image_data = await self._fetch_image_data(image_source)
-            is_gif, upload_data, native = await self.hass.async_add_executor_job(
-                self._adapt_image, image_data, sharpen, animation.is_lametric(image_source)
-            )
+            try:
+                is_gif, upload_data, native = await self.hass.async_add_executor_job(
+                    self._adapt_image, image_data, sharpen, animation.is_lametric(image_source)
+                )
+            except UnidentifiedImageError as ex:
+                raise DisplayError("not_an_image", source=image_source) from ex
             if is_gif:
                 # GIF upload uses its own command byte (1) which signals the device
                 # to enter animation mode directly. Calling image.set_mode(EnableDIY)
@@ -639,9 +667,12 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 success = await self._async_send_command(self._send_gif_blocks, upload_data)
             else:
                 success = await self._upload_static_image(upload_data)
+        except DisplayError as ex:
+            _LOGGER.warning("Failed to display image %s: %s", image_source, ex)
+            raise
         except Exception as ex:
             _LOGGER.warning("Failed to display image %s: %s", image_source, ex)
-            return False
+            raise DisplayError("image_failed", source=image_source, error=ex) from ex
         if success:
             self._set_current_mode("image")
             self._captured_preview = (self._content_generation, native)
@@ -657,18 +688,26 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         show_icon_message action); the icon color only applies to MDI icons
         (image files keep their own colors).
         """
+        from PIL import UnidentifiedImageError
+
         message = self._state.get("icon_message_text", "").strip()
-        if not self._state.get("icon_message_icon", "").strip() or not message:
-            _LOGGER.warning("Icon & Message needs both an icon and a text to display")
-            return False
+        icon_source = self._state.get("icon_message_icon", "").strip()
+        if not icon_source or not message:
+            raise DisplayError("icon_message_incomplete")
         try:
-            gif_data = await self._async_build_icon_message_gif()
+            try:
+                gif_data = await self._async_build_icon_message_gif()
+            except UnidentifiedImageError as ex:
+                raise DisplayError("not_an_image", source=icon_source) from ex
             # The GIF is already canvas-sized with a tiny palette, so it skips the
             # library's normalisation (which would also cap the animation at 2 s).
             success = await self._async_send_command(self._send_gif_blocks, gif_data)
+        except DisplayError as ex:
+            _LOGGER.warning("Failed to display icon+message: %s", ex)
+            raise
         except Exception as ex:
             _LOGGER.warning("Failed to display icon+message: %s", ex)
-            return False
+            raise DisplayError("image_failed", source=icon_source, error=ex) from ex
         if success:
             self._set_current_mode("image")
             self._captured_preview = (self._content_generation, gif_data)
@@ -770,7 +809,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             exists = await self.hass.async_add_executor_job(os.path.exists, path)
             if not exists:
                 _LOGGER.info("Downloading MDI asset: %s", url)
-                data = await self._fetch_image_data(url)
+                data = await self._download(url)
                 def _write(d: bytes) -> None:
                     os.makedirs(os.path.dirname(path), exist_ok=True)
                     with open(path, "wb") as fh:
@@ -812,10 +851,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
         codepoint = cls._mdi_codepoints.get(icon_name)
         if codepoint is None:
-            raise ValueError(
-                f"Unknown MDI icon: mdi:{icon_name} "
-                f"(codepoints loaded: {len(cls._mdi_codepoints)})"
-            )
+            raise DisplayError("mdi_unknown", name=icon_name)
 
         import logging as _logging
         _log = _logging.getLogger(__name__)
@@ -866,7 +902,10 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Return a LaMetric icon (GIF or PNG) for ``lam:<id>``, downloading it on first use."""
         import aiohttp
 
-        icon_id = animation.lametric_icon_id(source)
+        try:
+            icon_id = animation.lametric_icon_id(source)
+        except ValueError:
+            raise DisplayError("lametric_invalid", source=source) from None
         path = self.hass.config.path(f".storage/idotmatrix_lametric/{icon_id}")
 
         def _read() -> bytes | None:
@@ -881,10 +920,10 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             return data
         _LOGGER.info("Downloading LaMetric icon %s", icon_id)
         try:
-            data = await self._fetch_image_data(animation.LAMETRIC_ICON_URL.format(icon_id))
-        except aiohttp.ClientResponseError as ex:
-            if ex.status == 404:
-                raise ValueError(f"Unknown LaMetric icon lam:{icon_id}") from ex
+            data = await self._download(animation.LAMETRIC_ICON_URL.format(icon_id))
+        except DisplayError as ex:
+            if isinstance(ex.__cause__, aiohttp.ClientResponseError) and ex.__cause__.status == 404:
+                raise DisplayError("lametric_unknown", icon_id=icon_id) from ex
             raise
 
         def _write() -> None:
@@ -899,16 +938,36 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """Return raw bytes from a ``lam:<id>`` LaMetric icon, local file path or http(s) URL."""
         if animation.is_lametric(source):
             return await self._get_lametric_icon_bytes(source)
+        if source.startswith("mdi:"):
+            raise DisplayError("mdi_not_supported", source=source)
         if source.startswith(("http://", "https://")):
-            import aiohttp
-            async with aiohttp.ClientSession() as session:
-                async with session.get(source, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    resp.raise_for_status()
-                    return await resp.read()
+            return await self._download(source)
         def _read():
             with open(source, "rb") as fh:
                 return fh.read()
-        return await self.hass.async_add_executor_job(_read)
+        try:
+            return await self.hass.async_add_executor_job(_read)
+        except PermissionError as ex:
+            raise DisplayError("image_failed", source=source, error=ex) from ex
+        except OSError:
+            raise source_not_found(source) from None
+
+    @staticmethod
+    async def _download(url: str) -> bytes:
+        """Download ``url``; DisplayError (caused by the aiohttp error) if that fails."""
+        import aiohttp
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    resp.raise_for_status()
+                    return await resp.read()
+        except aiohttp.ClientResponseError as ex:
+            raise DisplayError("download_failed", url=url, error=f"HTTP {ex.status} {ex.message}") from ex
+        except asyncio.TimeoutError as ex:
+            raise DisplayError("download_failed", url=url, error="no response within 30 s") from ex
+        except aiohttp.ClientError as ex:
+            raise DisplayError("download_failed", url=url, error=str(ex) or type(ex).__name__) from ex
 
     def _adapt_image(
         self, image_data: bytes, sharpen: bool, pixel_art: bool = False

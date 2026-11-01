@@ -223,7 +223,43 @@
       "message": "No loaded iDotMatrix display found in the selected target."
     },
     "action_failed": {
-      "message": "Failed to update {device}. Check that the display is in range and connected."
+      "message": "{device} did not accept the update."
+    },
+    "not_connected": {
+      "message": "Could not connect to {device}. Check that the display is switched on and within Bluetooth range of Home Assistant or a Bluetooth proxy."
+    },
+    "command_failed": {
+      "message": "{device} did not accept the update: {error}"
+    },
+    "image_source_typo": {
+      "message": "\"{source}\" is not a known image source. Did you mean \"{suggestion}\"?"
+    },
+    "image_not_found": {
+      "message": "Image file not found: \"{source}\". Use a full path (e.g. /config/www/icon.png), an http(s) URL, lam:ID for a LaMetric icon or, for Icon & Message, mdi:NAME."
+    },
+    "mdi_not_supported": {
+      "message": "\"{source}\": MDI icons only work as the Icon & Message icon. For a full-screen image use a LaMetric icon (lam:ID), a file path or an http(s) URL."
+    },
+    "mdi_unknown": {
+      "message": "Unknown MDI icon \"mdi:{name}\". Look up icon names at https://pictogrammers.com/library/mdi/"
+    },
+    "lametric_invalid": {
+      "message": "\"{source}\" is not a valid LaMetric icon. Use lam:ID, e.g. lam:18391."
+    },
+    "lametric_unknown": {
+      "message": "LaMetric icon {icon_id} does not exist. Find icons at https://developer.lametric.com/icons"
+    },
+    "download_failed": {
+      "message": "Could not download {url}: {error}"
+    },
+    "not_an_image": {
+      "message": "\"{source}\" is not an image that can be shown (PNG, JPEG, BMP, WebP or GIF)."
+    },
+    "image_failed": {
+      "message": "Could not show \"{source}\": {error}"
+    },
+    "icon_message_incomplete": {
+      "message": "Icon & Message needs both an icon and a text."
     }
   }
 }
