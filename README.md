@@ -126,7 +126,7 @@ Once configured, the integration creates several entities:
 ### Actions
 All actions target a display by device, entity or area, and their editor is translated (English, German).
 
-- **`idotmatrix.show_icon_message`**: Show an icon with text below in one step. MDI icon picker, text with templates, optional full-spectrum text/icon colors (omit them to keep the current colors; in YAML also `[r, g, b]` or a preset name like `orange`). Updates the Icon & Message entities.
+- **`idotmatrix.show_icon_message`**: Show an icon with text below in one step. MDI icon picker, text with templates, optional full-spectrum text and icon colors (omit them to keep the current colors; in YAML also `[r, g, b]` or a preset name like `orange`). Updates the Icon & Message entities.
 - **`idotmatrix.show_text`**: Show scrolling text with optional color, font size (8–32 px) and speed (1–100) in one call. Text supports templates. The settings are kept, so later **Text: Message** updates look the same.
 - **`idotmatrix.start_countdown`**: Start the countdown with a duration picker (up to 59:59) instead of setting Minutes and Seconds separately.
 - **`idotmatrix.set_scoreboard`**: Set home and/or away score in one display update.
@@ -134,6 +134,8 @@ All actions target a display by device, entity or area, and their editor is tran
 - **`idotmatrix.show_effect`**: Show an effect in up to four colors of your choice (the effect entity always uses the last colors; before, effects were fixed to red, green and blue).
 - **`idotmatrix.show_image`**: Show an image, animated GIF or LaMetric icon (`lam:18391`) full screen, from a local path or URL. Updates **Image: File**.
 - **`idotmatrix.start_chronograph`**: Start the stopwatch from zero.
+
+The actions `show_text`, `show_icon_message` and `show_image` take a **`background_color`** (color picker, black by default): behind the text, behind icon and text, or where an image is transparent or doesn't fill the screen. It is kept for re-showing that content (Display Mode, `restore_after`). The clock, effects, scoreboard, countdown and chronograph are drawn by the display itself and have no background color setting.
 
 All actions accept **`restore_after`**: after that time the display returns to what it showed before (e.g. the clock), including that screen's text, colors and scores. For a countdown, the time counts from when the countdown ends. Several notifications in a row all return to the original screen, and anything else you show in the meantime cancels the restore.
 
