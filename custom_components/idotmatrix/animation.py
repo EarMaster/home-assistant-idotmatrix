@@ -112,18 +112,18 @@ def save_gif(frames: list, durations: list[int]) -> bytes:
     return out.getvalue()
 
 
-def fullscreen_gif(image_data: bytes, size: int) -> bytes:
+def fullscreen_gif(image_data: bytes, size: int, bg_color: tuple = (0, 0, 0)) -> bytes:
     """Render a (LaMetric) pixel-art image centred on the whole canvas."""
     from PIL import Image
 
-    frames = load_frames(image_data, (0, 0, 0))
+    frames = load_frames(image_data, bg_color)
     timeline = prune([(ms, i) for i, (ms, _) in enumerate(frames)])
     if len(timeline) == 1:
         timeline = [(1000, timeline[0][1])]
     images = []
     for _, i in timeline:
         icon = fit_image(frames[i][1], size, size)
-        canvas = Image.new("RGB", (size, size), (0, 0, 0))
+        canvas = Image.new("RGB", (size, size), bg_color)
         canvas.paste(icon, ((size - icon.width) // 2, (size - icon.height) // 2))
         images.append(canvas)
     return save_gif(images, [int(ms) for ms, _ in timeline])

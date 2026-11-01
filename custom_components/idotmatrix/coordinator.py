@@ -50,8 +50,8 @@ _PERSIST_KEYS = frozenset({
     "brightness", "screen_flipped",
     "clock_style", "clock_show_date", "clock_hour24", "clock_color",
     "effect_mode", "effect_colors",
-    "last_message", "text_color", "text_font_size", "text_speed", "text_font",
-    "last_image", "last_image_kind",
+    "last_message", "text_color", "text_font_size", "text_speed", "text_background_color", "text_font",
+    "last_image", "last_image_kind", "background_color",
     "icon_message_icon", "icon_message_text", "icon_message_text_color", "icon_message_icon_color",
     "scoreboard_home", "scoreboard_away",
     "countdown_minutes", "countdown_seconds", "countdown_timer_entity",
@@ -63,8 +63,8 @@ _PERSIST_KEYS = frozenset({
 _RESTORE_KEYS = (
     "clock_style", "clock_show_date", "clock_hour24", "clock_color",
     "effect_mode", "effect_colors",
-    "last_message", "text_color", "text_font_size", "text_speed",
-    "last_image", "last_image_kind",
+    "last_message", "text_color", "text_font_size", "text_speed", "text_background_color",
+    "last_image", "last_image_kind", "background_color",
     "icon_message_icon", "icon_message_text", "icon_message_text_color", "icon_message_icon_color",
     "scoreboard_home", "scoreboard_away", "countdown_minutes", "countdown_seconds",
 )
@@ -171,12 +171,16 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             "text_color": [255, 255, 255],
             "text_font_size": 24,
             "text_speed": 50,
+            "text_background_color": [0, 0, 0],
             # Font for everything the integration draws as text (Text and Icon & Message).
             "text_font": text_fonts.DEFAULT_FONT,
             "last_image": "",
             "icon_message_icon": "mdi:information-outline",
             "icon_message_text": "",
             "last_image_kind": "file",
+            # Behind Icon & Message and around/behind full-screen images (set by the
+            # show_icon_message and show_image actions), [r, g, b].
+            "background_color": [0, 0, 0],
             # Stored as [r, g, b] so the action can use any color, not just presets.
             "icon_message_text_color": [255, 255, 255],
             "icon_message_icon_color": [255, 255, 255],
@@ -535,6 +539,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         font_size: int | None = None,
         color: list[int] | None = None,
         speed: int | None = None,
+        background_color: list[int] | None = None,
     ) -> bool:
         """Display a scrolling text message.
 
@@ -547,7 +552,10 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             self._state["text_color"] = list(color)
         if speed is not None:
             self._state["text_speed"] = speed
+        if background_color is not None:
+            self._state["text_background_color"] = list(background_color)
         face = await self._async_text_mode_face()
+        background = tuple(self._state.get("text_background_color", (0, 0, 0)))
         color = tuple(self._state["text_color"])
         speed = self._state["text_speed"]
         success = await self._async_send_command(
@@ -557,6 +565,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             font_size=face.size,
             text_color=color,
             speed=speed,
+            # None keeps the device's plain black background.
+            text_bg_color=None if background == (0, 0, 0) else background,
         )
         if success:
             self._state["last_message"] = message
@@ -643,7 +653,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
     # Image
 
-    async def async_display_image(self, image_source: str, sharpen: bool = True) -> bool:
+    async def async_display_image(
+        self, image_source: str, sharpen: bool = True, background_color: list[int] | None = None
+    ) -> bool:
         """Display an image from a local file path or http(s) URL.
 
         Raises DisplayError if the image can't be loaded; returns False if the
@@ -651,6 +663,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         """
         from PIL import UnidentifiedImageError
 
+        if background_color is not None:
+            self._state["background_color"] = list(background_color)
         try:
             image_data = await self._fetch_image_data(image_source)
             try:
@@ -666,7 +680,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
                 # causes it to ignore the subsequent GIF packets — leaving a black screen.
                 success = await self._async_send_command(self._send_gif_blocks, upload_data)
             else:
-                success = await self._upload_static_image(upload_data)
+                success = await self._upload_static_image(upload_data, self._background())
         except DisplayError as ex:
             _LOGGER.warning("Failed to display image %s: %s", image_source, ex)
             raise
@@ -727,7 +741,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         return await self.hass.async_add_executor_job(
             self._create_icon_message_gif,
             icon_data, self._state.get("icon_message_text", "").strip(), self.screen_size_px,
-            tuple(self._state["icon_message_text_color"]), (0, 0, 0), self._state["text_font"],
+            tuple(self._state["icon_message_text_color"]), self._background(), self._state["text_font"],
         )
 
     # Display Preview
@@ -778,6 +792,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             return await self.hass.async_add_executor_job(
                 preview.text_preview_gif, state["last_message"].translate(text_fonts.SUBSTITUTES),
                 face.path, face.size, tuple(state.get("text_color", (255, 255, 255))), size,
+                tuple(state.get("text_background_color", (0, 0, 0))),
             )
         icon, label, color = preview.fallback_spec(mode, state, now)
         icon_data = await self._get_mdi_icon_bytes(icon[4:], color)
@@ -785,11 +800,15 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             self._create_icon_message_gif, icon_data, label, size, color, (0, 0, 0), state["text_font"]
         )
 
-    async def async_update_icon_message(self, display: bool = False, **settings: str) -> bool:
+    async def async_update_icon_message(
+        self, display: bool = False, background_color: list[int] | None = None, **settings: str
+    ) -> bool:
         """Store Icon & Message settings, then display if asked to or if it is on screen.
 
         settings keys: icon, text, text_color, icon_color (colors as [r, g, b]).
         """
+        if background_color is not None:
+            self._state["background_color"] = list(background_color)
         for key, value in settings.items():
             self._state[f"icon_message_{key}"] = value
         on_screen = (
@@ -857,7 +876,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         _log = _logging.getLogger(__name__)
 
         font = ImageFont.truetype(font_path, size=max(size - 2, 8))
-        img = Image.new("RGB", (size, size), (0, 0, 0))
+        # Transparent, so the icon sits on whatever background it is shown on.
+        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         # No anti-aliasing: grey edge pixels look muddy on an LED matrix and bloat the GIF.
         draw.fontmode = "1"
@@ -872,10 +892,8 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         draw.text((x, y), char, font=font, fill=color)
 
         pixels = list(img.getdata())
-        non_black = sum(1 for p in pixels if p != (0, 0, 0))
-        _log.debug(
-            "MDI icon %r rendered: %d/%d non-black pixels", icon_name, non_black, len(pixels)
-        )
+        lit = sum(1 for p in pixels if p[3])
+        _log.debug("MDI icon %r rendered: %d/%d lit pixels", icon_name, lit, len(pixels))
 
         out = io.BytesIO()
         img.save(out, format="PNG")
@@ -886,6 +904,9 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         return await self.hass.async_add_executor_job(
             text_fonts.text_mode_face, self._state["text_font"], self._state["text_font_size"]
         )
+
+    def _background(self) -> tuple[int, int, int]:
+        return tuple(self._state.get("background_color", (0, 0, 0)))
 
     async def async_set_text_font(self, font: str) -> bool:
         """Select the font for text, and redraw text that is on screen with it."""
@@ -984,27 +1005,29 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         from idotmatrix.util.image_utils import ResizeMode
 
         size = self.screen_size_px
+        bg = self._background()
         if pixel_art:
-            gif_data = animation.fullscreen_gif(image_data, size)
+            gif_data = animation.fullscreen_gif(image_data, size, bg)
             return True, gif_data, gif_data
         if self._detect_gif(image_data):
             gif_data = self._client.gif._load_gif_and_adapt_to_canvas(
-                io.BytesIO(image_data), size, ResizeMode.FIT, True, (0, 0, 0), None,
+                io.BytesIO(image_data), size, ResizeMode.FIT, True, bg, None,
             )
             return True, gif_data, gif_data
-        processed = self._process_static_image(image_data, sharpen)
+        processed = self._process_static_image(image_data, sharpen, bg)
         rgb = ImageModule._load_image_and_adapt_to_canvas(
-            io.BytesIO(processed), size, ResizeMode.FIT, False, (0, 0, 0)
+            io.BytesIO(processed), size, ResizeMode.FIT, False, bg
         )
         return False, processed, preview.rgb_to_gif(rgb, size)
 
-    async def _upload_static_image(self, image_data: bytes) -> bool:
+    async def _upload_static_image(self, image_data: bytes, background_color: tuple) -> bool:
         """Upload static image bytes to the device."""
         ok = await self._async_send_command(self._client.image.set_mode)
         if not ok:
             return False
         return await self._async_send_command(
-            self._client.image.upload_image_file, io.BytesIO(image_data)
+            self._client.image.upload_image_file, io.BytesIO(image_data),
+            background_color=background_color,
         )
 
     async def _send_gif_blocks(self, gif_data: bytes) -> None:
@@ -1028,7 +1051,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         return image_data[:6] in (b"GIF87a", b"GIF89a")
 
     @staticmethod
-    def _process_static_image(image_data: bytes, sharpen: bool) -> bytes:
+    def _process_static_image(image_data: bytes, sharpen: bool, bg_color: tuple = (0, 0, 0)) -> bytes:
         """Resize and optionally sharpen a static image; return PNG bytes."""
         from PIL import Image, ImageFilter, ImageOps
 
@@ -1036,7 +1059,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         if img.mode in ("RGBA", "LA", "P"):
             if img.mode == "P":
                 img = img.convert("RGBA")
-            bg = Image.new("RGB", img.size, (0, 0, 0))
+            bg = Image.new("RGB", img.size, bg_color)
             bg.paste(img, mask=img.split()[-1] if img.mode in ("RGBA", "LA") else None)
             img = bg
         else:

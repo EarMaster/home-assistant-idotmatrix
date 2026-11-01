@@ -73,6 +73,10 @@
           "name": "Icon color",
           "description": "MDI icons only. Leave empty to keep the current icon color. In YAML also [r, g, b] or a preset name."
         },
+        "background_color": {
+          "name": "Background color",
+          "description": "Color behind the icon and text. Default: black."
+        },
         "restore_after": {
           "name": "Restore after",
           "description": "Return to what was on screen before after this time. Leave empty to keep showing it."
@@ -98,6 +102,10 @@
         "speed": {
           "name": "Speed",
           "description": "Scroll speed. Leave empty to keep the current speed."
+        },
+        "background_color": {
+          "name": "Background color",
+          "description": "Color behind the text. Default: black."
         },
         "restore_after": {
           "name": "Restore after",
@@ -200,6 +208,10 @@
         "image": {
           "name": "Image",
           "description": "A LaMetric icon (lam:18391), a local file path (/config/www/images/door.gif) or an http(s) URL. PNG, JPEG, BMP, WebP and GIF."
+        },
+        "background_color": {
+          "name": "Background color",
+          "description": "Shown where the image is transparent or doesn't fill the screen. Default: black."
         },
         "restore_after": {
           "name": "Restore after",

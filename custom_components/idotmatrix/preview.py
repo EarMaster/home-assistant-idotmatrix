@@ -70,7 +70,9 @@ def upscale_factor(size: int) -> int:
     return max(1, PREVIEW_TARGET_PX // size)
 
 
-def text_preview_gif(message: str, font_path: str, font_size: int, color: tuple, size: int) -> bytes:
+def text_preview_gif(
+    message: str, font_path: str, font_size: int, color: tuple, size: int, bg_color: tuple = (0, 0, 0)
+) -> bytes:
     """Approximate the device's scrolling text.
 
     Glyphs are drawn exactly like the library does before sending them (16×32 "1"-mode
@@ -94,7 +96,7 @@ def text_preview_gif(message: str, font_path: str, font_size: int, color: tuple,
         scale = size / _GLYPH_H
         strip = strip.resize((max(1, round(strip.width * scale)), size), Image.NEAREST)
     mask = strip.convert("L")
-    colored = Image.new("RGB", mask.size, (0, 0, 0))
+    colored = Image.new("RGB", mask.size, bg_color)
     colored.paste(color, mask=mask)
 
     # Marquee: enter from the right edge, scroll until fully gone.
@@ -104,7 +106,7 @@ def text_preview_gif(message: str, font_path: str, font_size: int, color: tuple,
     y = (size - colored.height) // 2
     frames = []
     for offset in range(0, travel, step):
-        frame = Image.new("RGB", (size, size), (0, 0, 0))
+        frame = Image.new("RGB", (size, size), bg_color)
         frame.paste(colored, (size - offset, y))
         frames.append(frame)
     return _save_gif(frames, frame_ms)

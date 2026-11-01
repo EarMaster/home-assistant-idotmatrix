@@ -80,6 +80,7 @@ SCHEMAS = {
         vol.Required("text"): cv.string,
         vol.Optional("text_color"): _rgb_color,
         vol.Optional("icon_color"): _rgb_color,
+        vol.Optional("background_color", default=[0, 0, 0]): _rgb_color,
         **_RESTORE_AFTER,
     }),
     SERVICE_SHOW_TEXT: _schema({
@@ -87,6 +88,7 @@ SCHEMAS = {
         vol.Optional("color"): _rgb_color,
         vol.Optional("font_size"): vol.All(vol.Coerce(int), vol.Range(min=8, max=32)),
         vol.Optional("speed"): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
+        vol.Optional("background_color", default=[0, 0, 0]): _rgb_color,
         **_RESTORE_AFTER,
     }),
     SERVICE_START_COUNTDOWN: _schema({
@@ -112,6 +114,7 @@ SCHEMAS = {
     }),
     SERVICE_SHOW_IMAGE: _schema({
         vol.Required("image"): cv.string,
+        vol.Optional("background_color", default=[0, 0, 0]): _rgb_color,
         **_RESTORE_AFTER,
     }),
     SERVICE_START_CHRONOGRAPH: _schema({
@@ -175,7 +178,9 @@ async def _show_icon_message(coordinator: IDotMatrixDataUpdateCoordinator, call:
     settings = {
         "icon": call.data["icon"].strip(),
         "text": call.data["text"].strip(),
-        **_color_settings(call.data, text_color="text_color", icon_color="icon_color"),
+        **_color_settings(
+            call.data, text_color="text_color", icon_color="icon_color", background_color="background_color"
+        ),
     }
     await _async_run(
         coordinator, call, lambda: coordinator.async_update_icon_message(display=True, **settings)
@@ -188,6 +193,7 @@ async def _show_text(coordinator: IDotMatrixDataUpdateCoordinator, call: Service
         font_size=call.data.get("font_size"),
         color=call.data.get("color"),
         speed=call.data.get("speed"),
+        background_color=call.data["background_color"],
     ))
 
 
@@ -228,7 +234,9 @@ async def _show_effect(coordinator: IDotMatrixDataUpdateCoordinator, call: Servi
 
 
 async def _show_image(coordinator: IDotMatrixDataUpdateCoordinator, call: ServiceCall) -> None:
-    await _async_run(coordinator, call, lambda: coordinator.async_display_image(call.data["image"].strip()))
+    await _async_run(coordinator, call, lambda: coordinator.async_display_image(
+        call.data["image"].strip(), background_color=call.data["background_color"],
+    ))
 
 
 async def _start_chronograph(coordinator: IDotMatrixDataUpdateCoordinator, call: ServiceCall) -> None:

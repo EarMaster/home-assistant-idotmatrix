@@ -25,6 +25,10 @@ show_icon_message:
       example: [255, 0, 0]
       selector:
         color_rgb:
+    background_color:
+      default: [0, 0, 0]
+      selector:
+        color_rgb:
     restore_after:
       example: "00:00:30"
       selector:
@@ -63,6 +67,10 @@ show_text:
           max: 100
           step: 1
           mode: slider
+    background_color:
+      default: [0, 0, 0]
+      selector:
+        color_rgb:
     restore_after:
       example: "00:00:30"
       selector:
@@ -200,6 +208,10 @@ show_image:
       example: "lam:18391"
       selector:
         text:
+    background_color:
+      default: [0, 0, 0]
+      selector:
+        color_rgb:
     restore_after:
       example: "00:00:30"
       selector:

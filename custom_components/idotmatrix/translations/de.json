@@ -73,6 +73,10 @@
           "name": "Symbolfarbe",
           "description": "Nur für MDI-Symbole. Leer lassen, um die aktuelle Symbolfarbe zu behalten. In YAML auch [r, g, b] oder ein Farbname."
         },
+        "background_color": {
+          "name": "Hintergrundfarbe",
+          "description": "Farbe hinter Symbol und Text. Standard: Schwarz."
+        },
         "restore_after": {
           "name": "Zurückkehren nach",
           "description": "Nach dieser Zeit zur vorherigen Anzeige zurückkehren. Leer lassen, um dauerhaft anzuzeigen."
@@ -98,6 +102,10 @@
         "speed": {
           "name": "Geschwindigkeit",
           "description": "Scrollgeschwindigkeit. Leer lassen, um die aktuelle Geschwindigkeit zu behalten."
+        },
+        "background_color": {
+          "name": "Hintergrundfarbe",
+          "description": "Farbe hinter dem Text. Standard: Schwarz."
         },
         "restore_after": {
           "name": "Zurückkehren nach",
@@ -200,6 +208,10 @@
         "image": {
           "name": "Bild",
           "description": "Ein LaMetric-Symbol (lam:18391), ein lokaler Dateipfad (/config/www/images/door.gif) oder eine http(s)-URL. PNG, JPEG, BMP, WebP und GIF."
+        },
+        "background_color": {
+          "name": "Hintergrundfarbe",
+          "description": "Sichtbar, wo das Bild transparent ist oder den Bildschirm nicht füllt. Standard: Schwarz."
         },
         "restore_after": {
           "name": "Zurückkehren nach",
