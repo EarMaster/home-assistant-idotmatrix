@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.3] - 2026-11-01
+
+### Added
+- `background_color` (color picker, black by default) for `show_text`, `show_icon_message` and `show_image`: behind the text, behind icon and text, or where an image is transparent or doesn't fill the screen; kept for Display Mode and `restore_after`
+
+### Changed
+- MDI icons in Icon & Message are drawn on a transparent background, so they sit on the chosen background color
+
 ## [1.10.2] - 2026-11-01
 
 ### Fixed
