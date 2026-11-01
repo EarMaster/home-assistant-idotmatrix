@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.2] - 2026-11-01
+
+### Fixed
+- Actions and entities report what actually went wrong instead of always "Check that the display is in range and connected": typos in image sources (with a suggestion, e.g. `lma:8196` → `lam:8196`), missing files, `mdi:` used for Image: File, invalid or unknown LaMetric icons, unknown MDI icons, failed downloads, files that aren't images, Icon & Message without icon or text, display not reachable, and errors reported by the display (English and German)
+
+### Changed
+- Image: File, Icon & Message and Display Mode show an error in the UI when their content can't be loaded, instead of failing silently
+
 ## [1.10.1] - 2026-11-01
 
 ### Added
