@@ -15,5 +15,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/EarMaster/home-assistant-idotmatrix/issues",
   "requirements": ["idotmatrix-api-client==0.3.0"],
-  "version": "1.10.3"
+  "version": "1.10.4"
 }
