@@ -83,3 +83,7 @@ COLOR_PRESETS = {
     "purple": (128, 0, 128),
     "pink": (255, 192, 203),
 }
+
+# Where users can look up icon names (passed to error messages as placeholders).
+MDI_ICONS_URL = "https://pictogrammers.com/library/mdi/"
+LAMETRIC_ICONS_URL = "https://developer.lametric.com/icons"

@@ -253,13 +253,13 @@
       "message": "\"{source}\": MDI icons only work as the Icon & Message icon. For a full-screen image use a LaMetric icon (lam:ID), a file path or an http(s) URL."
     },
     "mdi_unknown": {
-      "message": "Unknown MDI icon \"mdi:{name}\". Look up icon names at https://pictogrammers.com/library/mdi/"
+      "message": "Unknown MDI icon \"mdi:{name}\". Look up icon names at {url}"
     },
     "lametric_invalid": {
       "message": "\"{source}\" is not a valid LaMetric icon. Use lam:ID, e.g. lam:18391."
     },
     "lametric_unknown": {
-      "message": "LaMetric icon {icon_id} does not exist. Find icons at https://developer.lametric.com/icons"
+      "message": "LaMetric icon {icon_id} does not exist. Find icons at {url}"
     },
     "download_failed": {
       "message": "Could not download {url}: {error}"

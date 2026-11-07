@@ -2,8 +2,6 @@
 
 show_icon_message:
   target:
-    device:
-      integration: idotmatrix
     entity:
       integration: idotmatrix
   fields:
@@ -36,8 +34,6 @@ show_icon_message:
 
 show_text:
   target:
-    device:
-      integration: idotmatrix
     entity:
       integration: idotmatrix
   fields:
@@ -78,8 +74,6 @@ show_text:
 
 start_countdown:
   target:
-    device:
-      integration: idotmatrix
     entity:
       integration: idotmatrix
   fields:
@@ -95,8 +89,6 @@ start_countdown:
 
 set_scoreboard:
   target:
-    device:
-      integration: idotmatrix
     entity:
       integration: idotmatrix
   fields:
@@ -121,8 +113,6 @@ set_scoreboard:
 
 show_clock:
   target:
-    device:
-      integration: idotmatrix
     entity:
       integration: idotmatrix
   fields:
@@ -158,8 +148,6 @@ show_clock:
 
 show_effect:
   target:
-    device:
-      integration: idotmatrix
     entity:
       integration: idotmatrix
   fields:
@@ -198,8 +186,6 @@ show_effect:
 
 show_image:
   target:
-    device:
-      integration: idotmatrix
     entity:
       integration: idotmatrix
   fields:
@@ -219,8 +205,6 @@ show_image:
 
 start_chronograph:
   target:
-    device:
-      integration: idotmatrix
     entity:
       integration: idotmatrix
   fields:

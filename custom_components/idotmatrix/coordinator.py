@@ -33,6 +33,8 @@ from .const import (
     DEFAULT_SCREEN_SIZE,
     DOMAIN,
     EFFECT_TYPES,
+    LAMETRIC_ICONS_URL,
+    MDI_ICONS_URL,
     SCREEN_SIZES,
 )
 
@@ -870,7 +872,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
 
         codepoint = cls._mdi_codepoints.get(icon_name)
         if codepoint is None:
-            raise DisplayError("mdi_unknown", name=icon_name)
+            raise DisplayError("mdi_unknown", name=icon_name, url=MDI_ICONS_URL)
 
         import logging as _logging
         _log = _logging.getLogger(__name__)
@@ -944,7 +946,7 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
             data = await self._download(animation.LAMETRIC_ICON_URL.format(icon_id))
         except DisplayError as ex:
             if isinstance(ex.__cause__, aiohttp.ClientResponseError) and ex.__cause__.status == 404:
-                raise DisplayError("lametric_unknown", icon_id=icon_id) from ex
+                raise DisplayError("lametric_unknown", icon_id=icon_id, url=LAMETRIC_ICONS_URL) from ex
             raise
 
         def _write() -> None:
