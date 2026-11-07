@@ -1,23 +1,19 @@
 {
   "domain": "idotmatrix",
   "name": "iDotMatrix Display",
-  "codeowners": [
-    "@EarMaster"
+  "bluetooth": [
+    {
+      "local_name": "IDM-*"
+    }
   ],
+  "categories": ["messaging_notifications.push_notifications"],
+  "codeowners": ["@EarMaster"],
   "config_flow": true,
   "dependencies": ["bluetooth"],
   "documentation": "https://github.com/EarMaster/home-assistant-idotmatrix",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/EarMaster/home-assistant-idotmatrix/issues",
-  "requirements": [
-    "idotmatrix-api-client==0.3.0"
-  ],
-  "version": "1.10.3",
-  "icon": "mdi:led-strip",
-  "bluetooth": [
-    {
-      "local_name": "IDM-*"
-    }
-  ]
+  "requirements": ["idotmatrix-api-client==0.3.0"],
+  "version": "1.10.3"
 }
