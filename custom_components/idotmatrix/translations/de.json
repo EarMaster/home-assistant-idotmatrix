@@ -247,7 +247,7 @@
       "message": "„{source}“ ist keine bekannte Bildquelle. Meintest du „{suggestion}“?"
     },
     "image_url_not_allowed": {
-      "message": "Die URL „{url}“ steht nicht in allowlist_external_urls. Trage sie (oder ihren Anfang, z. B. https://example.com/) dort ein, um Bilder von ihr anzuzeigen."
+      "message": "Die URL „{url}“ steht nicht in allowlist_external_urls. Trage sie oder ihren Anfang dort ein, um Bilder von ihr anzuzeigen."
     },
     "image_path_not_allowed": {
       "message": "Die Bilddatei „{source}“ liegt außerhalb der Ordner, die Home Assistant lesen darf. Lege sie in /config/www oder einen Medienordner, oder füge ihren Ordner zu allowlist_external_dirs hinzu."
