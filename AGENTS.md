@@ -107,6 +107,7 @@ Font sizes:    small=8, medium=12, large=16
 ```
 custom_components/idotmatrix/
   manifest.json        version, requirements, bluetooth filter (IDM-*)
+  brand/               icon.png (256 px) and icon@2x.png (512 px), required for the HACS default catalog
   const.py             all constants, mappings (CLOCK_STYLES, EFFECT_TYPES, …)
   coordinator.py       IDotMatrixDataUpdateCoordinator — state, BLE comms
   entity.py            IDotMatrixEntity base class
