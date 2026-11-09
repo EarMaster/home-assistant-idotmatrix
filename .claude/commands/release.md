@@ -90,14 +90,19 @@ Perform these steps in order:
    git commit -m "chore(release): vA.B.C"
    ```
 
-5. **Create the tag**:
+5. **Push the commits and wait for the checks**:
+   ```
+   git push
+   gh run list --workflow validate.yml --commit "$(git rev-parse HEAD)"
+   gh run watch <run id> --exit-status
+   ```
+   Only continue when every job of that Validate run (Marketplace/HACS validation and hassfest) passed. If one fails, stop: report the errors, fix them in a new commit and push again — never tag a commit whose checks fail.
+
+6. **Create and push the tag**:
    ```
    git tag vA.B.C
+   git push origin vA.B.C
    ```
+   `release.yml` runs the same checks again and creates the GitHub release only if they pass. Wait for that run and confirm the release exists.
 
-6. **Push commits and tag**:
-   ```
-   git push && git push origin vA.B.C
-   ```
-
-Report the result of each step and confirm the tag was pushed successfully.
+Report the result of each step, with the links to the green Validate run and the GitHub release.

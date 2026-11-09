@@ -17,7 +17,7 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 
 ## Development workflow
 
-**Releasing:** Use the `/release` skill (`.claude/commands/release.md`). It groups uncommitted changes into conventional commits, updates `manifest.json` version + `CHANGELOG.md`, tags, and pushes. GitHub Actions (`release.yml`) then creates the GitHub release automatically on tag push. HACS uses `hacs.json` for discovery; `validate.yml` runs the Marketplace (HACS) validation and hassfest on pushes, pull requests and daily, so keep `hacs.json` to the keys HACS accepts and `manifest.json` with `issue_tracker`, only keys hassfest knows (no `icon`), and its key order (`domain`, `name`, then alphabetical).
+**Releasing:** Use the `/release` skill (`.claude/commands/release.md`). It groups uncommitted changes into conventional commits, updates `manifest.json` version + `CHANGELOG.md`, tags, and pushes. Tag only a commit whose Validate run passed; `release.yml` runs the same checks again (`validate.yml` via `workflow_call`) and creates the GitHub release on tag push only if they pass. HACS uses `hacs.json` for discovery; `validate.yml` runs the Marketplace (HACS) validation and hassfest on pushes, pull requests and daily, so keep `hacs.json` to the keys HACS accepts and `manifest.json` with `issue_tracker`, only keys hassfest knows (no `icon`), and its key order (`domain`, `name`, then alphabetical).
 
 ## Architecture
 
