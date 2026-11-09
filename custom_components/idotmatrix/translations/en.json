@@ -246,6 +246,12 @@
     "image_source_typo": {
       "message": "\"{source}\" is not a known image source. Did you mean \"{suggestion}\"?"
     },
+    "image_url_not_allowed": {
+      "message": "URL \"{url}\" is not in allowlist_external_urls. Add it (or its beginning, e.g. https://example.com/) there to show images from it."
+    },
+    "image_path_not_allowed": {
+      "message": "Image file \"{source}\" is outside the folders Home Assistant may read. Put it in /config/www or a media folder, or add its folder to allowlist_external_dirs."
+    },
     "image_not_found": {
       "message": "Image file not found: \"{source}\". Use a full path (e.g. /config/www/icon.png), an http(s) URL, lam:ID for a LaMetric icon or, for Icon & Message, mdi:NAME."
     },

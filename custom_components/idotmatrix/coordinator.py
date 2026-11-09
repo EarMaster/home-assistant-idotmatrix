@@ -13,6 +13,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
@@ -964,27 +965,39 @@ class IDotMatrixDataUpdateCoordinator(DataUpdateCoordinator):
         if source.startswith("mdi:"):
             raise DisplayError("mdi_not_supported", source=source)
         if source.startswith(("http://", "https://")):
+            # allowlist_external_urls is empty by default; once the admin lists URLs,
+            # only those can be fetched (the URL comes from entities and actions any
+            # user can use, and could point into the local network).
+            urls = self.hass.config.allowlist_external_urls
+            if urls and not self.hass.config.is_allowed_external_url(source):
+                raise DisplayError("image_url_not_allowed", url=source)
             return await self._download(source)
-        def _read():
+        def _read() -> bytes | None:
+            # Only folders in allowlist_external_dirs (by default /config/www and the
+            # media folders): the path comes from entities and actions any user can use.
+            if not self.hass.config.is_allowed_path(source):
+                return None
             with open(source, "rb") as fh:
                 return fh.read()
         try:
-            return await self.hass.async_add_executor_job(_read)
+            data = await self.hass.async_add_executor_job(_read)
         except PermissionError as ex:
             raise DisplayError("image_failed", source=source, error=ex) from ex
         except OSError:
             raise source_not_found(source) from None
+        if data is None:
+            raise DisplayError("image_path_not_allowed", source=source)
+        return data
 
-    @staticmethod
-    async def _download(url: str) -> bytes:
+    async def _download(self, url: str) -> bytes:
         """Download ``url``; DisplayError (caused by the aiohttp error) if that fails."""
         import aiohttp
 
+        session = async_get_clientsession(self.hass)
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    resp.raise_for_status()
-                    return await resp.read()
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                resp.raise_for_status()
+                return await resp.read()
         except aiohttp.ClientResponseError as ex:
             raise DisplayError("download_failed", url=url, error=f"HTTP {ex.status} {ex.message}") from ex
         except asyncio.TimeoutError as ex:

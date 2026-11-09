@@ -89,8 +89,8 @@ Once configured, the integration creates several entities:
 - **Icon & Message: Icon**: Icon shown in the top portion of the screen. One of:
   - An MDI icon name: `mdi:home`, `mdi:thermometer`, `mdi:weather-sunny` — the MDI webfont is downloaded and cached automatically on first use
   - A LaMetric icon: `lam:18391` — use the number shown in the [LaMetric icon gallery](https://developer.lametric.com/icons). The icon is downloaded and cached on first use. Animated icons keep animating: the icon and the scrolling text loop together, so neither jumps when the animation restarts.
-  - A local file path: `/config/www/icons/home.png`
-  - An http(s) URL
+  - A local file path: `/config/www/icons/home.png`. Only folders Home Assistant may read are allowed: `/config/www`, the media folders and anything listed in [`allowlist_external_dirs`](https://www.home-assistant.io/integrations/homeassistant/#allowlist_external_dirs)
+  - An http(s) URL. If [`allowlist_external_urls`](https://www.home-assistant.io/integrations/homeassistant/#allowlist_external_urls) lists any URLs, only URLs starting with one of them are fetched; that keeps users from loading images from your local network
 
   Changing it re-sends the message if Icon & Message is currently on screen.
 - **Icon & Message: Text**: Text shown below the icon; setting it displays icon + text. Text that fits the screen width is shown centred and still; longer text scrolls ping-pong style (left-aligned → right-aligned and back, with a short pause and a small margin at each end), so it never leaves the screen. Very long texts scroll in bigger steps because the device is limited to 64 animation frames. The text uses the font chosen in **Font**.

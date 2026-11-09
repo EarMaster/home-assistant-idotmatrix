@@ -19,8 +19,6 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 
 **Releasing:** Use the `/release` skill (`.claude/commands/release.md`). It groups uncommitted changes into conventional commits, updates `manifest.json` version + `CHANGELOG.md`, tags, and pushes. GitHub Actions (`release.yml`) then creates the GitHub release automatically on tag push. HACS uses `hacs.json` for discovery; `validate.yml` runs the Marketplace (HACS) validation and hassfest on pushes, pull requests and daily, so keep `hacs.json` to the keys HACS accepts and `manifest.json` with `issue_tracker`, only keys hassfest knows (no `icon`), and its key order (`domain`, `name`, then alphabetical).
 
-**Smoke-testing without HA:** Run `python test_integration.py`. It mocks both `homeassistant.*` and `idotmatrix.*` via `sys.modules` before importing, so it works without a real HA instance or Bluetooth hardware.
-
 ## Architecture
 
 ### Central coordinator
@@ -35,6 +33,7 @@ A Home Assistant custom integration for iDotMatrix LED matrix displays (Bluetoot
 - **Display Preview** (`image.py`, `preview.py`): the device is write-only, so the preview is derived. Exact pixels are captured at send time into `_captured_preview = (content_generation, native_gif)` (Icon & Message GIF, `_adapt_image()` output for files). `async_update_preview()` runs in `_async_update_data` and re-renders only when `(content_generation, is_on, minute-if-clock)` changes: captured pixels if the generation matches, otherwise rebuilt from state (text via the library's glyph drawing, device-drawn modes via `preview.fallback_spec()` + the Icon & Message renderer). `preview_version` changes only when the bytes change; the entity upscales with NEAREST (~320 px) and caches per version. Per-size reference templates for device-drawn modes are meant to replace `fallback_spec()` later.
 - **GIF upload**: `_send_gif_blocks` uploads ready, canvas-sized GIF bytes with the library's `create_gif_data_packets` (`INDEX_SHOW_NOW`) + `ConnectionManager.send_packets(response=True, wait_for_ack=True)`: the device acknowledges each 4 KB block (`05 00 01 00 xx` on `fa03`) before the next is sent. It skips the conversion of the library's `upload_gif_file`, so the Display Preview captures exactly the uploaded bytes; files are normalised beforehand in `_adapt_image` (library `_load_gif_and_adapt_to_canvas`). Static images go through `image.set_mode` + `image.upload_image_file(BytesIO)`.
 - **Animated icons** (`animation.py`): `lam:<id>` sources are fetched by `_fetch_image_data` from LaMetric's public icon endpoint and cached in `.storage/idotmatrix_lametric/`. Full screen they bypass the library's GIF normalisation (`_adapt_image(pixel_art=True)` → `fullscreen_gif`, integer NEAREST upscale). Icon & Message treats icon frames and text scroll positions as timelines; `combine()` makes the GIF loop a whole number of icon loops and text loops (the text pauses absorb the difference), then `prune()` drops the shortest frames until ≤64.
+- **Image sources** (`_fetch_image_data`): user-supplied sources come from entities and actions that non-admin users can use. Local paths must pass `hass.config.is_allowed_path()` (`allowlist_external_dirs`; `/config/www` and media by default), http(s) URLs must pass `is_allowed_external_url()` whenever `allowlist_external_urls` is not empty. Integration-owned files (MDI font/CSS, LaMetric cache in `.storage`) are read directly, never through this path. `_download` uses HA's shared `async_get_clientsession`.
 - **Device events**: Methods fire `hass.bus.async_fire(f"{DOMAIN}_{event_type}", ...)` for device triggers (see `device_trigger.py`).
 
 ### Platform → coordinator method → library call
@@ -129,5 +128,4 @@ custom_components/idotmatrix/
   services.yaml        action fields/selectors (texts are in strings.json / translations)
   strings.json         config flow string keys
   translations/en.json English strings for config/options UI
-test_integration.py    standalone smoke test (mocks HA + library)
 ```
